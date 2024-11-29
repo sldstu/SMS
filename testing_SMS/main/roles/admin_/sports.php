@@ -13,37 +13,35 @@ $conn = (new Database())->connect();
 
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  // Get the incoming JSON data
   $input = json_decode(file_get_contents('php://input'), true);
 
-  // Validate the data
-  if (!isset($input['sport_name']) || empty($input['sport_name'])) {
-    echo json_encode(['success' => false, 'message' => 'Sport name is required.']);
-    exit();
+  if (!isset($input['action'])) {
+      echo json_encode(['success' => false, 'message' => 'No action specified.']);
+      exit();
   }
 
-  $sport_name = trim($input['sport_name']); // Sanitize input
+  $action = $input['action'];
 
-  try {
-    // Insert new sport into the database
-    $query = $conn->prepare("INSERT INTO sports (sport_name) VALUES (:sport_name)");
-    $query->bindParam(':sport_name', $sport_name);
-    $query->execute();
+  if ($action === 'delete_sport') {
+      // Validate sport_id
+      if (!isset($input['sport_id']) || empty($input['sport_id'])) {
+          echo json_encode(['success' => false, 'message' => 'Sport ID is required.']);
+          exit();
+      }
 
-    // Get the ID of the newly inserted sport
-    $sport_id = $conn->lastInsertId();
+      $sport_id = $input['sport_id'];
 
-    // Return success with sport data
-    echo json_encode([
-      'success' => true,
-      'sport_id' => $sport_id,
-      'sport_name' => $sport_name
-    ]);
-    exit();
-  } catch (Exception $e) {
-    // Log error in case of failure
-    echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
-    exit();
+      try {
+          // Delete the sport record
+          $query = $conn->prepare("DELETE FROM sports WHERE sport_id = :sport_id");
+          $query->bindParam(':sport_id', $sport_id, PDO::PARAM_INT);
+          $query->execute();
+
+          echo json_encode(['success' => true, 'message' => 'Sport deleted successfully.']);
+      } catch (Exception $e) {
+          echo json_encode(['success' => false, 'message' => 'Failed to delete the sport: ' . $e->getMessage()]);
+      }
+      exit();
   }
 
 
@@ -309,10 +307,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-
-
-
-
   document.querySelectorAll('.edit-sport-btn').forEach(button => {
     button.addEventListener('click', function(e) {
       e.preventDefault();
@@ -458,5 +452,59 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  let sportToDeleteId = null; // Store the ID of the sport to delete
+  let sportToDeleteName = null;
+
+// Attach event listener to delete buttons
+document.querySelectorAll('.delete-sport-btn').forEach(button => {
+    button.addEventListener('click', function () {
+        sportToDeleteId = this.dataset.sportId; // Get sport ID from the button
+        const sportName = this.dataset.sportName; // Get sport name from the button
+
+        // Update modal message with the sport name
+        document.getElementById('confirmationMessage').textContent = `Are you sure you want to delete "${sportName}"?`;
+
+        // Show the confirmation modal
+        const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+        modal.show();
+    });
+});
+
+// Handle delete confirmation
+document.getElementById('confirmDeleteBtn').addEventListener('click', () => {
+    if (!sportToDeleteId) return;
+
+    // Send AJAX request to delete the sport
+    fetch('../main/roles/admin_/sports.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'delete_sport',
+            sport_id: sportToDeleteId,
+        }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Remove the sport row from the table
+            const sportRow = document.getElementById(`sport-row-${sportToDeleteId}`);
+            if (sportRow) {
+                sportRow.remove();
+            }
+
+            // Reset the sport ID after deletion
+            sportToDeleteId = null;
+
+            // Hide the confirmation modal
+            bootstrap.Modal.getInstance(document.getElementById('confirmationModal')).hide();
+        } else {
+            alert(data.message || 'Failed to delete the sport.');
+        }
+    })
+    .catch(error => {
+        console.error('Error during delete operation:', error);
+        alert('An error occurred while processing the delete request.');
+    });
+});
   
 </script>
