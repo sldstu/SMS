@@ -63,9 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
   }
   
-  
-
-
     // Edit Sport
     if ($action === 'edit_sport') {
         if (!isset($input['sport_id'], $input['sport_name']) || empty(trim($input['sport_name']))) {
@@ -89,30 +86,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // Delete Sport
-    if ($action === 'delete_sport') {
-        if (!isset($input['sport_id']) || empty($input['sport_id'])) {
-            echo json_encode(['success' => false, 'message' => 'Sport ID is required.']);
-            exit();
-        }
+// Delete Sport
+if ($action === 'delete_sport') {
+  if (!isset($input['sport_id']) || empty($input['sport_id'])) {
+      echo json_encode(['success' => false, 'message' => 'Sport ID is required.']);
+      exit();
+  }
 
-        $sport_id = $input['sport_id'];
+  $sport_id = $input['sport_id'];
 
-        try {
-            $query = $conn->prepare("DELETE FROM sports WHERE sport_id = :sport_id");
-            $query->bindParam(':sport_id', $sport_id, PDO::PARAM_INT);
-            $query->execute();
+  // Check if there are any registrations for the sport
+  $checkRegistrationsQuery = $conn->prepare("SELECT COUNT(*) FROM registrations WHERE sport_id = :sport_id");
+  $checkRegistrationsQuery->bindParam(':sport_id', $sport_id, PDO::PARAM_INT);
+  $checkRegistrationsQuery->execute();
+  $registrationsCount = $checkRegistrationsQuery->fetchColumn();
 
-            echo json_encode(['success' => true, 'message' => 'Sport deleted successfully.']);
-        } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => 'Failed to delete sport: ' . $e->getMessage()]);
-        }
-        exit();
-    }
+  if ($registrationsCount > 0) {
+      echo json_encode([
+          'success' => false,
+          'message' => 'Cannot delete this sport because there are still students registered for it.'
+      ]);
+      exit();
+  }
 
-    // Invalid Action
-    echo json_encode(['success' => false, 'message' => 'Invalid action specified.']);
-    exit();
+  try {
+      // Delete the sport
+      $query = $conn->prepare("DELETE FROM sports WHERE sport_id = :sport_id");
+      $query->bindParam(':sport_id', $sport_id, PDO::PARAM_INT);
+      $query->execute();
+
+      echo json_encode(['success' => true, 'message' => 'Sport deleted successfully.']);
+  } catch (Exception $e) {
+      echo json_encode(['success' => false, 'message' => 'Failed to delete sport: ' . $e->getMessage()]);
+  }
+  exit();
+}
 }
 
 // Fetch sports for the page

@@ -23,15 +23,19 @@ if ($role === 'admin') {
         'admin_sports' => '../MAIN/roles/admin_/sports.php',
         'admin_events' => '../MAIN/roles/admin_/events.php',
         'admin_course_section' => '../MAIN/roles/admin_/course_section.php',
+        'admin_registration' => '../MAIN/roles/admin_/registration.php', // New page
         '404' => 'MAIN/roles/guest/404.php',
     ];
+    
     $sidebar_items = [
         ['name' => 'Dashboard', 'icon' => 'bi bi-grid-fill', 'page' => 'admin_dashboard'],
         ['name' => 'Users', 'icon' => 'fa-solid fa-user', 'page' => 'admin_users'],
         ['name' => 'Sports', 'icon' => 'fa-solid fa-medal', 'page' => 'admin_sports'],
         ['name' => 'Events', 'icon' => 'fa-solid fa-calendar-days', 'page' => 'admin_events'],
         ['name' => 'Course and Sections', 'icon' => 'bi bi-mortarboard-fill', 'page' => 'admin_course_section'],
+        ['name' => 'Registration', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_registration'], // New item
     ];
+    
 } elseif ($role === 'teacher') {
     $allowed_pages = [
         'mod_dashboard' => '../MAIN/roles/moderator_/dashboard_mod.php',
@@ -137,11 +141,6 @@ ob_end_flush(); // Flush the buffered output after headers
                         <i class="fa-solid fa-magnifying-glass"></i>
                     </button>
                 </form>
-
-                <a href="#" class="theme-toggle">
-                    <i class="fa-regular fa-moon"></i>
-                    <i class="fa-regular fa-sun"></i>
-                </a>
 
                 <div class="navbar-collapse navbar">
                     <ul class="navbar-nav">
