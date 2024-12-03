@@ -1,5 +1,4 @@
 <?php
-// session_start();
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -16,37 +15,12 @@ $query->execute();
 $users = $query->fetchAll(PDO::FETCH_ASSOC);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
-    // if (isset($data['action']) && $data['action'] === 'delete_user' && isset($input['user_id'])) {
-    //     $input = json_decode(file_get_contents('php://input'), true);
-    //     $user_id = $data['user_id'];
-    //     if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    //         if (isset($_POST['delete_sport'])) {
-    //             $query = $conn->prepare("DELETE FROM registrations WHERE student_id = :user_id");
-    //             $query->bindParam(':user_id', $user_id);
-    //             $query->execute();
-
-    //             $query = $conn->prepare("UPDATE sports SET teacher_id = NULL WHERE teacher_id = :user_id");
-    //             $query->bindParam(':user_id', $user_id);
-    //             $query->execute();
-
-    //             $query = $conn->prepare("DELETE FROM users WHERE user_id = :user_id");
-    //             $query->bindParam(':user_id', $user_id);
-    //             $query->execute();
-    //             exit();
-    //         }
-    //     }
-    // }
-    // exit();
-
-    // Handle delete request
     $input = json_decode(file_get_contents('php://input'), true);
 
     if (isset($input['action']) && $input['action'] === 'delete_user' && isset($input['user_id'])) {
         $user_id = $input['user_id'];
 
         try {
-            // Delete related records
             $query = $conn->prepare("DELETE FROM registrations WHERE student_id = :user_id");
             $query->bindParam(':user_id', $user_id);
             $query->execute();
@@ -55,7 +29,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $query->bindParam(':user_id', $user_id);
             $query->execute();
 
-            // Delete user
             $query = $conn->prepare("DELETE FROM users WHERE user_id = :user_id");
             $query->bindParam(':user_id', $user_id);
             if ($query->execute()) {
@@ -70,9 +43,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => false, 'message' => 'Server error while deleting user.']);
             exit();
         }
+    } elseif (isset($input['action']) && $input['action'] === 'create_user') {
+        $username = trim($input['username']);
+        $password = password_hash(trim($input['password']), PASSWORD_BCRYPT); // Encrypt password
+        $first_name = trim($input['first_name']);
+        $last_name = trim($input['last_name']);
+        $role = trim($input['role']);
+
+        // Validate input
+        if (empty($username) || empty($password) || empty($first_name) || empty($last_name) || empty($role)) {
+            echo json_encode(['success' => false, 'message' => 'All fields are required.']);
+            exit();
+        }
+
+        // Check if username already exists
+        $query = $conn->prepare("SELECT * FROM users WHERE username = :username");
+        $query->bindParam(':username', $username);
+        $query->execute();
+
+        if ($query->rowCount() > 0) {
+            echo json_encode(['success' => false, 'message' => 'Username already exists.']);
+            exit();
+        }
+
+        try {
+            // Insert new user
+            $query = $conn->prepare("
+                INSERT INTO users (username, password, first_name, last_name, role, datetime_sign_up) 
+                VALUES (:username, :password, :first_name, :last_name, :role, NOW())
+            ");
+            $query->bindParam(':username', $username);
+            $query->bindParam(':password', $password);
+            $query->bindParam(':first_name', $first_name);
+            $query->bindParam(':last_name', $last_name);
+            $query->bindParam(':role', $role);
+
+            if ($query->execute()) {
+                echo json_encode([
+                    'success' => true,
+                    'user' => [
+                        'user_id' => $conn->lastInsertId(),
+                        'username' => $username,
+                        'first_name' => $first_name,
+                        'last_name' => $last_name,
+                        'role' => $role,
+                        'datetime_sign_up' => date('Y-m-d H:i:s'),
+                        'datetime_last_online' => null
+                    ]
+                ]);
+                exit();
+            }
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => 'Error creating user: ' . $e->getMessage()]);
+            exit();
+        }
     }
 }
-
 ?>
 
 <!DOCTYPE html>
@@ -98,45 +124,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <option value="admin">Admin</option>
             </select>
             <button class="btn btn-primary px-4 shadow-sm" onclick="sortTable()">Sort Alphabetically</button>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                Create User
+            </button>
         </div>
 
 
         <!-- Users Table -->
         <div class="table-responsive">
-        <table id="users_table" class="table table-hover align-middle table-bordered rounded-3 overflow-hidden shadow">
-            <thead class="table-primary">
-                <tr class="text-center">
-                    <th>Username</th>
-                    <th>Role</th>
-                    <th>First Name</th>
-                    <th>Last Name</th>
-                    <th>Sign Up Time</th>
-                    <th>Last Online</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($users as $user): ?>
-                    <tr id="user-row-<?= $user['user_id'] ?>">
-                        <td class="username"><?= htmlspecialchars($user['username']) ?></td>
-                        <td class="role"><?= htmlspecialchars($user['role']) ?></td>
-                        <td class="first_name"><?= htmlspecialchars($user['first_name']) ?></td>
-                        <td class="last_name"><?= htmlspecialchars($user['last_name']) ?></td>
-                        <td><?= htmlspecialchars($user['datetime_sign_up']) ?></td>
-                        <td><?= htmlspecialchars($user['datetime_last_online']) ?></td>
-                        <td class="text-center">
-                            <div class="d-flex justify-content-center gap-2">
-                                <button class="btn btn-warning btn-sm edit-user-btn px-3" data-user-id="<?= $user['user_id'] ?>">Edit</button>
-                                <button class="btn btn-danger btn-sm delete-user-btn px-3" data-user-id="<?= $user['user_id'] ?>" data-username="<?= htmlspecialchars($user['username']) ?>">Delete</button>
-                            </div>
-                        </td>
+            <table id="users_table" class="table table-hover align-middle table-bordered rounded-3 overflow-hidden shadow">
+                <thead class="table-primary">
+                    <tr class="text-center">
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Sign Up Time</th>
+                        <th>Last Online</th>
+                        <th>Action</th>
                     </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-        <?php include '../MAIN/auth/loads/confirmation.php'; ?>
+                </thead>
+                <tbody>
+                    <?php foreach ($users as $user): ?>
+                        <tr id="user-row-<?= $user['user_id'] ?>">
+                            <td class="username"><?= htmlspecialchars($user['username']) ?></td>
+                            <td class="role"><?= htmlspecialchars($user['role']) ?></td>
+                            <td class="first_name"><?= htmlspecialchars($user['first_name']) ?></td>
+                            <td class="last_name"><?= htmlspecialchars($user['last_name']) ?></td>
+                            <td><?= htmlspecialchars($user['datetime_sign_up']) ?></td>
+                            <td><?= htmlspecialchars($user['datetime_last_online']) ?></td>
+                            <td class="text-center">
+                                <div class="d-flex justify-content-center gap-2">
+                                    <button class="btn btn-warning btn-sm edit-user-btn px-3" data-user-id="<?= $user['user_id'] ?>">Edit</button>
+                                    <button class="btn btn-danger btn-sm delete-user-btn px-3" data-user-id="<?= $user['user_id'] ?>" data-username="<?= htmlspecialchars($user['username']) ?>">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php include '../MAIN/auth/loads/confirmation.php'; ?>
+        </div>
     </div>
-</div>
 
 
     <!-- Modal for editing user -->
@@ -153,6 +182,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary" id="saveChangesBtn">Save changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addUserModalLabel">Add New User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addUserForm" novalidate>
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" class="form-control" id="username" name="username" required>
+                            <div id="usernameError" class="invalid-feedback">
+                                Please enter a unique username.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                            <div class="invalid-feedback">
+                                Please enter a password.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="first_name" class="form-label">First Name</label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" required>
+                            <div class="invalid-feedback">
+                                Please provide the first name.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="last_name" class="form-label">Last Name</label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" required>
+                            <div class="invalid-feedback">
+                                Please provide the last name.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="role" class="form-label">Role</label>
+                            <select class="form-select" id="role" name="role" required>
+                                <option value="student">Student</option>
+                                <option value="teacher">Teacher</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Please specify the role.
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="createUserBtn">Add User</button>
                 </div>
             </div>
         </div>
@@ -229,147 +317,237 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     const userId = this.dataset.userId;
                     const username = this.dataset.username;
 
-                    console.log(`Delete button clicked for User ID: ${userId}, Username: ${username}`); // Debugging
-
-                    // Show the confirmation modal
-                    showConfirmationModal(`Are you sure you want to delete the user "${username}"?`, () => {
-                        console.log(`User ${userId} confirmed for deletion`); // Debugging
-
-                        // Callback for confirmed action
-                        fetch('../MAIN/roles/admin_/users.php', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    action: 'delete_user',
-                                    user_id: userId
+                    // Show confirmation modal
+                    showConfirmationModal(
+                        `Are you sure you want to delete user ${username}?`,
+                        () => {
+                            fetch("../MAIN/roles/admin_/users.php", {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                        action: "delete_user",
+                                        user_id: userId,
+                                    }),
                                 })
-                            })
-                            .then(response => {
-                                if (!response.ok) {
-                                    throw new Error(`HTTP error! status: ${response.status}`);
-                                }
-                                return response.json();
-                            })
-                            .then(data => {
-                                console.log('Server response:', data); // Debugging
-                                if (data.success) {
-                                    // Remove user row dynamically
-                                    const userRow = document.getElementById(`user-row-${userId}`);
-                                    if (userRow) {
-                                        userRow.remove();
-                                        console.log(`User ${userId} removed from the table successfully.`); // Debugging
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        const userRow = document.getElementById(`user-row-${userId}`);
+                                        if (userRow) {
+                                            userRow.remove();
+                                        }
+                                    } else {
+                                        alert(data.message || "Failed to delete user.");
                                     }
-                                } else {
-                                    alert(data.message || 'Failed to delete user.');
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Error during delete operation:', error); // Debugging
-                                alert('An error occurred while deleting the user. Please check the console for details.');
-                            });
-                    }, 'btn-danger', 'Delete');
+                                })
+                                .catch(error => {
+                                    console.error("Error during delete operation:", error);
+                                    alert("An error occurred while deleting the user.");
+                                });
+                        },
+                        "btn-danger",
+                        "Delete"
+                    );
                 });
             });
-        });
 
-        document.querySelectorAll('.edit-user-btn').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const userId = this.dataset.userId;
-                fetch(`../MAIN/edit/edit_user.php?user_id=${userId}`)
-                    .then(response => response.text())
-                    .then(html => {
-                        const modalBody = document.querySelector('#editUserModal .modal-body');
-                        modalBody.innerHTML = html;
-                        // Show the modal
-                        new bootstrap.Modal(document.getElementById('editUserModal')).show();
-                    })
-                    .catch(err => console.error(err));
+            // Attach edit button listeners
+            document.querySelectorAll(".edit-user-btn").forEach(button => {
+                button.addEventListener("click", event => {
+                    event.preventDefault();
+                    const userId = button.dataset.userId;
+
+                    fetch(`../MAIN/edit/edit_user.php?user_id=${userId}`)
+                        .then(response => response.text())
+                        .then(html => {
+                            const modalBody = document.querySelector("#editUserModal .modal-body");
+                            modalBody.innerHTML = html;
+                            new bootstrap.Modal(document.getElementById("editUserModal")).show();
+                        })
+                        .catch(err => console.error(err));
+                });
             });
-        });
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Save Changes Button Logic
-            document.getElementById('saveChangesBtn').addEventListener('click', function() {
-                // Get the form inside the modal
-                const form = document.querySelector('#editUserModal .modal-body form');
+            // Save changes button logic
+            const saveChangesBtn = document.getElementById("saveChangesBtn");
+            if (saveChangesBtn) {
+                saveChangesBtn.addEventListener("click", () => {
+                    const form = document.querySelector("#editUserModal .modal-body form");
 
-                // Clear previous invalid feedback messages
-                form.querySelectorAll('.invalid-feedback').forEach(feedback => {
-                    feedback.style.display = 'none';
+                    form.querySelectorAll(".invalid-feedback").forEach(feedback => {
+                        feedback.style.display = "none";
+                    });
+
+                    let isValid = true;
+
+                    form.querySelectorAll("input[required]").forEach(input => {
+                        if (!input.value.trim()) {
+                            isValid = false;
+                            const invalidFeedback = input.nextElementSibling;
+                            if (invalidFeedback) {
+                                invalidFeedback.style.display = "block";
+                            }
+                            input.classList.add("is-invalid");
+                        } else {
+                            input.classList.remove("is-invalid");
+                        }
+                    });
+
+                    if (!isValid) return;
+
+                    const formData = new FormData(form);
+                    fetch("../MAIN/edit/edit_user.php", {
+                            method: "POST",
+                            body: formData,
+                        })
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.success) {
+                                const userId = formData.get("user_id");
+                                const userRow = document.querySelector(`#user-row-${userId}`);
+                                if (userRow) {
+                                    userRow.querySelector(".username").textContent = formData.get("username");
+                                    userRow.querySelector(".role").textContent = formData.get("role");
+                                    userRow.querySelector(".first_name").textContent = formData.get("first_name");
+                                    userRow.querySelector(".last_name").textContent = formData.get("last_name");
+                                }
+                                const modal = bootstrap.Modal.getInstance(document.getElementById("editUserModal"));
+                                modal.hide();
+                            } else {
+                                alert("Error saving changes: " + (result.message || "Unknown error"));
+                            }
+                        })
+                        .catch(error => console.error("Error:", error));
+                });
+            }
+
+            // Real-time validation feedback
+            document.querySelectorAll("#editUserModal .modal-body input[required]").forEach(input => {
+                input.addEventListener("input", function() {
+                    if (this.value.trim()) {
+                        this.classList.remove("is-invalid");
+                        const invalidFeedback = this.nextElementSibling;
+                        if (invalidFeedback) {
+                            invalidFeedback.style.display = "none";
+                        }
+                    }
+                });
+            });
+
+            document.getElementById("createUserBtn").addEventListener("click", () => {
+                const form = document.getElementById("addUserForm");
+                const formData = new FormData(form);
+
+                // Reset all error messages and remove previous "is-invalid" classes
+                const inputs = form.querySelectorAll("input, select");
+                inputs.forEach(input => {
+                    input.classList.remove("is-invalid");
+                    const invalidFeedback = input.nextElementSibling;
+                    if (invalidFeedback) {
+                        invalidFeedback.style.display = "none"; // Hide the error messages
+                    }
                 });
 
                 let isValid = true;
 
-                // Validate each required input field
-                form.querySelectorAll('input[required]').forEach(input => {
+                // Check if any required field is empty and display invalid feedback
+                form.querySelectorAll("input[required], select[required]").forEach(input => {
                     if (!input.value.trim()) {
-                        isValid = false;
+                        input.classList.add("is-invalid"); // Add the red border
                         const invalidFeedback = input.nextElementSibling;
                         if (invalidFeedback) {
-                            invalidFeedback.style.display = 'block'; // Show invalid feedback
+                            invalidFeedback.style.display = "block"; // Show the error message
                         }
-                        input.classList.add('is-invalid'); // Add invalid class
-                    } else {
-                        input.classList.remove('is-invalid'); // Remove invalid class if corrected
+                        isValid = false;
                     }
                 });
 
-                // If the form is invalid, halt execution
-                if (!isValid) {
-                    return;
-                }
+                // If the form is invalid, stop the process
+                if (!isValid) return;
 
-                // Collect form data
-                const formData = new FormData(form);
+                const data = {
+                    action: "create_user",
+                    username: formData.get("username"),
+                    password: formData.get("password"),
+                    first_name: formData.get("first_name"),
+                    last_name: formData.get("last_name"),
+                    role: formData.get("role"),
+                };
 
-                // Proceed with AJAX request
-                fetch('../MAIN/edit/edit_user.php', {
-                        method: 'POST',
-                        body: formData
+                // Send the request to the server
+                fetch("../MAIN/roles/admin_/users.php", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(data),
                     })
-                    .then(response => response.json())
-                    .then(result => {
+                    .then((response) => response.json())
+                    .then((result) => {
                         if (result.success) {
-                            // Update the table dynamically
-                            const userId = formData.get('user_id');
-                            const userRow = document.querySelector(`#user-row-${userId}`);
-                            if (userRow) {
-                                userRow.querySelector('.username').textContent = formData.get('username');
-                                userRow.querySelector('.role').textContent = formData.get('role');
-                                userRow.querySelector('.first_name').textContent = formData.get('first_name');
-                                userRow.querySelector('.last_name').textContent = formData.get('last_name');
-                            }
+                            const user = result.user;
+                            const tbody = document.querySelector("#users_table tbody");
 
-                            // Hide the modal
-                            const modal = bootstrap.Modal.getInstance(document.getElementById('editUserModal'));
-                            modal.hide();
+                            tbody.insertAdjacentHTML(
+                                "beforeend",
+                                `<tr id="user-row-${user.user_id}">
+                        <td>${user.username}</td>
+                        <td>${user.role}</td>
+                        <td>${user.first_name}</td>
+                        <td>${user.last_name}</td>
+                        <td>${user.datetime_sign_up}</td>
+                        <td>${user.datetime_last_online || ""}</td>
+                        <td class="text-center">
+                            <button class="btn btn-warning btn-sm edit-user-btn px-3" data-user-id="${user.user_id}">Edit</button>
+                            <button class="btn btn-danger btn-sm delete-user-btn px-3" data-user-id="${user.user_id}" data-username="${user.username}">Delete</button>
+                        </td>
+                    </tr>`
+                            );
+
+                            // Reset the form and hide the modal
+                            form.reset();
+                            bootstrap.Modal.getInstance(document.getElementById("addUserModal")).hide();
                         } else {
-                            alert('Error saving changes: ' + (result.message || 'Unknown error'));
+                            // Handle error for existing username
+                            if (result.message === "Username already exists. Please choose another.") {
+                                const usernameInput = document.getElementById("username");
+                                const usernameError = document.getElementById("usernameError");
+                                usernameError.textContent = result.message;
+                                usernameInput.classList.add("is-invalid"); // Highlight input with error
+                                usernameError.style.display = "block"; // Show error message
+                            } else {
+                                alert(result.message || "Failed to create user.");
+                            }
                         }
                     })
-                    .catch(error => {
-                        console.error('Error:', error);
-                    });
+                    .catch((error) => console.error("Error:", error));
             });
 
-            // Add real-time validation feedback
-            document.querySelectorAll('#editUserModal .modal-body input[required]').forEach(input => {
-                input.addEventListener('input', function() {
+            // Real-time validation feedback
+            document.querySelectorAll("#addUserModal .modal-body input[required]").forEach(input => {
+                input.addEventListener("input", function() {
                     if (this.value.trim()) {
-                        this.classList.remove('is-invalid'); // Remove invalid class if corrected
+                        this.classList.remove("is-invalid");
                         const invalidFeedback = this.nextElementSibling;
                         if (invalidFeedback) {
-                            invalidFeedback.style.display = 'none'; // Hide invalid feedback
+                            invalidFeedback.style.display = "none"; // Hide error message
                         }
                     }
                 });
             });
+
+            // Specifically handle username validation (to show the message "Username already exists.")
+            document.getElementById("username").addEventListener("input", function() {
+                const usernameError = document.getElementById("usernameError");
+                usernameError.style.display = "none"; // Hide the "Username already exists." message when typing
+            });
+
         });
     </script>
 
 </body>
-<?php include_once '../MAIN/includes/_footer.php';?>
+<?php include_once '../MAIN/includes/_footer.php'; ?>
+
 </html>
