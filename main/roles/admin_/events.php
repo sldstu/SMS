@@ -1,384 +1,326 @@
-<?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-if (session_status() === PHP_SESSION_NONE) {
-  session_start();
-}
-
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
-  header('Location: login.php');
-  exit();
-}
-
-require_once __DIR__ . '/../../database/database.class.php';
-$conn = (new Database())->connect();
-
-// Handle AJAX delete request for events
-$data = json_decode(file_get_contents('php://input'), true);
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($data['ajax']) && $data['ajax'] === 'delete_event') {
-  $event_id = $data['event_id'] ?? null;
-
-  if (!$event_id) {
-    echo json_encode(['success' => false, 'error' => 'Invalid request or missing event_id.']);
+    <?php
+    if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+    }
+    if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
+    header('Location: login.php');
     exit();
-  }
-
-  $query = $conn->prepare("DELETE FROM events WHERE event_id = :event_id");
-  $query->bindParam(':event_id', $event_id, PDO::PARAM_INT);
-
-  if ($query->execute()) {
-    echo json_encode(['success' => true]);
-  } else {
-    echo json_encode(['success' => false, 'error' => 'Unable to delete event.']);
-  }
-  exit();
-}
-
-
-// Handle AJAX add request for new event
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($data['ajax']) && $data['ajax'] === 'add_event') {
-  $event_name = $data['event_name'] ?? null;
-  $event_date = $data['event_date'] ?? null;
-
-  if (!$event_name || !$event_date) {
-    echo json_encode(['success' => false, 'error' => 'Invalid request or missing event data.']);
-    exit();
-  }
-
-  $query = $conn->prepare("INSERT INTO events (event_name, event_date) VALUES (:event_name, :event_date)");
-  $query->bindParam(':event_name', $event_name, PDO::PARAM_STR);
-  $query->bindParam(':event_date', $event_date, PDO::PARAM_STR);
-
-  if ($query->execute()) {
-    $event_id = $conn->lastInsertId(); // Get the ID of the newly inserted event
-    echo json_encode(['success' => true, 'event_id' => $event_id, 'event_name' => $event_name, 'event_date' => $event_date]);
-  } else {
-    echo json_encode(['success' => false, 'error' => 'Unable to add event.']);
-  }
-  exit();
-}
-
-
-// Fetch all events
-$query = $conn->prepare("SELECT * FROM events");
-$query->execute();
-$events = $query->fetchAll(PDO::FETCH_ASSOC);
-?>
-
-
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Dashboard</title>
-  <link rel="stylesheet" href="../SMS/css/style.css">
-</head>
-
-<body>
-  <div class="container mt-5">
-    <h2>Event Management</h2>
-    <div class="mb-3">
-      <input type="text" id="search_event_bar" class="form-control" placeholder="Search for events..." onkeyup="searchEvent()">
-    </div>
-
-    <!-- Events Table -->
-    <table class="table table-hover align-middle table-bordered rounded-3 overflow-hidden shadow" id="events_table">
-      <thead class="table-primary">
-        <tr class="text-center">
-          <th>Event</th>
-          <th>Date</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <?php foreach ($events as $event): ?>
-          <tr id="event-row-<?= $event['event_id'] ?>">
-            <td class="event_name"><?= htmlspecialchars($event['event_name']) ?></td>
-            <td class="event_date"><?= htmlspecialchars($event['event_date']) ?></td>
-            <td class="text-center">
-              <button class="btn btn-warning btn-sm edit-event-btn" data-event-id="<?= $event['event_id'] ?>">Edit</button>
-              <button class="btn btn-danger btn-sm delete-event-btn" data-event-id="<?= $event['event_id'] ?>" data-event-name="<?= htmlspecialchars($event['event_name']) ?>">Delete</button>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-
-    <h3>Add New Event</h3>
-    <form action="index.php" method="post">
-      <div class="mb-3">
-        <label for="event_name" class="form-label">Event Name</label>
-        <input type="text" id="event_name" name="event_name" class="form-control" required>
-      </div>
-      <div class="mb-3">
-        <label for="event_date" class="form-label">Event Date</label>
-        <input type="date" id="event_date" name="event_date" class="form-control" required>
-      </div>
-      <button type="submit" name="add_event" class="btn btn-primary">Add Event</button>
-    </form>
-  </div>
-
-  <!-- Modal for Editing Event -->
-  <div class="modal fade" id="editEventModal" tabindex="-1" aria-labelledby="editEventModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="editEventModalLabel">Edit Event</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body" id="editEventModalBody">
-          <!-- Content will be loaded dynamically via AJAX -->
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="button" class="btn btn-primary" id="saveChangesBtn">Save Changes</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal for Deleting Event -->
-  <div class="modal fade" id="deleteEventModal" tabindex="-1" aria-labelledby="deleteEventModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="deleteEventModalLabel">Delete Event</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body" id="deleteEventModalBody">
-          <!-- Content will be dynamically set -->
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-danger" id="confirmDeleteEventBtn">Delete</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    function searchEvent() {
-      const input = document.getElementById("search_event_bar").value.toUpperCase();
-      const table = document.getElementById("events_table");
-      const rows = table.getElementsByTagName("tr");
-
-      for (let i = 1; i < rows.length; i++) {
-        const eventNameCell = rows[i].getElementsByTagName("td")[0];
-        const eventName = eventNameCell ? eventNameCell.textContent || eventNameCell.innerText : "";
-        rows[i].style.display = eventName.toUpperCase().includes(input) ? "" : "none";
-      }
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      let eventToDeleteId = null;
-      let eventToDeleteName = null;
+    require_once __DIR__ . '/../../database/database.class.php';
+    $conn = (new Database())->connect();
 
-      // Attach delete button click listeners
-      document.querySelectorAll('.delete-event-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          eventToDeleteId = this.getAttribute('data-event-id');
-          eventToDeleteName = this.getAttribute('data-event-name');
-          document.getElementById('deleteEventModalBody').textContent = `Are you sure you want to delete the event "${eventToDeleteName}"?`;
+    // Fetch all events
+    $query = $conn->prepare("SELECT event_id, event_name, event_date, teacher_id, time, location, facilitator, image FROM events");
+    $query->execute();
+    $events = $query->fetchAll(PDO::FETCH_ASSOC);
 
-          const modal = new bootstrap.Modal(document.getElementById('deleteEventModal'));
-          modal.show();
-        });
-      });
+    // Fetch sports for each event
+    $sports_query = $conn->prepare("SELECT sport_id, sport_name, event_id, sport_date, sport_time, sport_location, sport_facilitator, sport_image FROM sports");
+    $sports_query->execute();
+    $sports = $sports_query->fetchAll(PDO::FETCH_ASSOC);
 
-      // Confirm delete
-      document.getElementById('confirmDeleteEventBtn').addEventListener('click', () => {
-        if (eventToDeleteId) {
-          fetch('../main/roles/admin_/events.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                ajax: 'delete_event',
-                event_id: eventToDeleteId
-              }),
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (data.success) {
-                document.getElementById(`event-row-${eventToDeleteId}`).remove();
-                // alert('Event deleted successfully.');
-              } else {
-                alert(data.error || 'Failed to delete event.');
-              }
-            })
-            .catch(error => {
-              console.error('Error during delete operation:', error);
-              // alert('An error occurred while deleting the event.');
-            })
-            .finally(() => {
-              eventToDeleteId = null;
-              eventToDeleteName = null;
-              bootstrap.Modal.getInstance(document.getElementById('deleteEventModal')).hide();
-            });
-        }
-      });
-    });
+    if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+        if (isset($_POST['delete_event'])) {
+            $event_id = $_POST['event_id'];
+            $query = $conn->prepare("DELETE FROM events WHERE event_id = :event_id");
+            $query->bindParam(':event_id', $event_id);
+            $query->execute();
+            header("Refresh:0");
+        } elseif (isset($_POST['add_event'])) {
+            // Add event logic
+            $event_name = $_POST['event_name'];
+            $teacher_id = $_POST['teacher_id'];
+            $event_date = $_POST['event_date'];
+            $time = $_POST['time'];
+            $location = $_POST['location'];
+            $facilitator = $_POST['facilitator'];
+            $image = null;
 
+            if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
+                $targetDir = "uploads/";
+                $image_name = basename($_FILES['image']['name']);
+                $targetFilePath = $targetDir . $image_name;
 
-
-
-    // Edit Event AJAX
-    function editEvent(eventId) {
-      fetch(`../main/edit/edit_event_admin.php?event_id=${eventId}`)
-        .then(response => response.text())
-        .then(html => {
-          document.getElementById('editEventModalBody').innerHTML = html;
-          const modal = new bootstrap.Modal(document.getElementById('editEventModal'));
-          modal.show();
-
-          // Attach form submit listener after modal content loads
-          document.getElementById('saveChangesBtn').addEventListener('click', function() {
-            const form = document.querySelector('#editEventModalBody form');
-            const formData = new FormData(form);
-
-            fetch('../main/edit/edit_event_admin.php', {
-                method: 'POST',
-                body: formData
-              })
-              .then(response => response.json())
-              .then(result => {
-                if (result.success) {
-                  const row = document.getElementById(`event-row-${eventId}`);
-                  row.querySelector('.event_name').textContent = formData.get('event_name');
-                  row.querySelector('.event_date').textContent = formData.get('event_date');
-                  modal.hide();
+                if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFilePath)) {
+                    $image = $targetFilePath;
                 } else {
-                  alert(result.message || 'Failed to save changes.');
+                    echo "Error uploading image.";
+                    exit();
                 }
-              })
-              .catch(error => console.error('Error:', error));
-          });
-        })
-        .catch(err => console.error(err));
-    }
-
-    // Attach event listeners
-    document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('.edit-event-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          const eventId = this.dataset.eventId;
-          editEvent(eventId);
-        });
-      });
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-      // Handle the form submission for adding a new event
-      document.querySelector('form[action="index.php"]').addEventListener('submit', function(event) {
-        event.preventDefault(); // Prevent the default form submission
-
-        const eventName = document.getElementById('event_name').value;
-        const eventDate = document.getElementById('event_date').value;
-
-        fetch('../main/roles/admin_/events.php', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              ajax: 'add_event',
-              event_name: eventName,
-              event_date: eventDate
-            }),
-          })
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              // Add the new event row to the table
-              const newRow = document.createElement('tr');
-              newRow.id = `event-row-${data.event_id}`;
-              newRow.innerHTML = `
-                    <td class="event_name">${data.event_name}</td>
-                    <td class="event_date">${data.event_date}</td>
-                    <td class="text-center">
-                        <button class="btn btn-warning btn-sm edit-event-btn" data-event-id="${data.event_id}">Edit</button>
-                        <button class="btn btn-danger btn-sm delete-event-btn" data-event-id="${data.event_id}" data-event-name="${data.event_name}">Delete</button>
-                    </td>
-                `;
-              document.querySelector('#events_table tbody').appendChild(newRow);
-
-              // Optionally reset the form fields after submission
-              document.getElementById('event_name').value = '';
-              document.getElementById('event_date').value = '';
-
-              alert('Event added successfully!');
-            } else {
-              alert(data.error || 'Failed to add event.');
             }
-          })
-          .catch(error => {
-            console.error('Error during add operation:', error);
-            alert('An error occurred while adding the event.');
-          });
-      });
-    });
 
+            $query = $conn->prepare("INSERT INTO events (event_name, teacher_id, event_date, time, location, facilitator, image) 
+                                    VALUES (:event_name, :teacher_id, :event_date, :time, :location, :facilitator, :image)");
+            $query->bindParam(':event_name', $event_name);
+            $query->bindParam(':teacher_id', $teacher_id);
+            $query->bindParam(':event_date', $event_date);
+            $query->bindParam(':time', $time);
+            $query->bindParam(':location', $location);
+            $query->bindParam(':facilitator', $facilitator);
+            $query->bindParam(':image', $image);
+            $query->execute();
+            header("Refresh:0");
+        } elseif (isset($_POST['add_sport'])) {
+            // Add sport logic
+            $sport_name = $_POST['sport_name'];
+            $event_id = $_POST['event_id'];
+            $sport_date = $_POST['sport_date'];
+            $sport_time = $_POST['sport_time'];
+            $sport_location = $_POST['sport_location'];
+            $sport_facilitator = $_POST['sport_facilitator'];
+            $sport_image = null;
 
-    document.addEventListener('DOMContentLoaded', () => {
-      let eventToDeleteId = null;
-      let eventToDeleteName = null;
+            if (isset($_FILES['sport_image']) && $_FILES['sport_image']['error'] == 0) {
+                $targetDir = "uploads/";
+                $sport_image_name = basename($_FILES['sport_image']['name']);
+                $targetFilePath = $targetDir . $sport_image_name;
 
-      // Handle Delete Button Click
-      document.querySelectorAll('.delete-event-btn').forEach(button => {
-        button.addEventListener('click', function() {
-          eventToDeleteId = this.getAttribute('data-event-id');
-          eventToDeleteName = this.getAttribute('data-event-name');
-          document.getElementById('deleteEventModalBody').textContent = `Are you sure you want to delete the event "${eventToDeleteName}"?`;
+                if (move_uploaded_file($_FILES['sport_image']['tmp_name'], $targetFilePath)) {
+                    $sport_image = $targetFilePath;
+                } else {
+                    echo "Error uploading sport image.";
+                    exit();
+                }
+            }
 
-          const modal = new bootstrap.Modal(document.getElementById('deleteEventModal'));
-          modal.show();
-        });
-      });
-
-      // Confirm Deletion
-      document.getElementById('confirmDeleteEventBtn').addEventListener('click', () => {
-        if (eventToDeleteId) {
-          fetch('../main/roles/admin_/events.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                ajax: 'delete_event',
-                event_id: eventToDeleteId
-              }),
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (data.success) {
-                document.getElementById(`event-row-${eventToDeleteId}`).remove();
-              } else {
-                alert(data.error || 'Failed to delete event.');
-              }
-            })
-            .catch(error => {
-              console.error('Error during delete operation:', error);
-              // alert('An error occurred while deleting the eventz.');
-            })
-            .finally(() => {
-              eventToDeleteId = null;
-              eventToDeleteName = null;
-              bootstrap.Modal.getInstance(document.getElementById('deleteEventModal')).hide();
-            });
+            $query = $conn->prepare("INSERT INTO sports (sport_name, event_id, sport_date, sport_time, sport_location, sport_facilitator, sport_image) 
+                                    VALUES (:sport_name, :event_id, :sport_date, :sport_time, :sport_location, :sport_facilitator, :sport_image)");
+            $query->bindParam(':sport_name', $sport_name);
+            $query->bindParam(':event_id', $event_id);
+            $query->bindParam(':sport_date', $sport_date);
+            $query->bindParam(':sport_time', $sport_time);
+            $query->bindParam(':sport_location', $sport_location);
+            $query->bindParam(':sport_facilitator', $sport_facilitator);
+            $query->bindParam(':sport_image', $sport_image);
+            $query->execute();
+            header("Refresh:0");
         }
-      });
-    });
-  </script>
+        }
+    ?>
+        <link rel="stylesheet" href="css/events.css">
+        <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Admin Dashboard</title>
+        <!-- Add Bootstrap CSS link -->
+         <link rel="stylesheet" href="/sms/sms/css/style.css">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
 
+        <div class="container my-5">
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <?php include_once('C:/xampp/htdocs/testing_SMS/main/includes/_head.php'); ?>
-</body>
+            <!-- Events Section -->
+            <div id="events_section" class="dashboard-section">
+                <h2 class="mb-4">All Events</h2>
 
-</html>
+                <!-- Add Event and Add Sport Buttons -->
+                <div class="row mb-4">
+                    <div class="col-12 col-md-6 mb-2">
+                        <button onclick="showAddEventForm()" class="btn btn-primary w-100">Add Event</button>
+                    </div>
+                    <div class="col-12 col-md-6 mb-2">
+                        <button onclick="showAddSportForm()" class="btn btn-secondary w-100">Add Sport</button>
+                    </div>
+                </div>
+
+                <!-- Add Event Form (Initially Hidden) -->
+                <div id="addEventForm" style="display:none;">
+                    <h3>Add Event</h3>
+                    <form action="admin_dashboard.php" method="post" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="teacher_id" class="form-label">Teacher ID:</label>
+                            <input type="number" name="teacher_id" id="teacher_id" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="event_name" class="form-label">Event Name:</label>
+                            <input type="text" name="event_name" id="event_name" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="event_date" class="form-label">Event Date:</label>
+                            <input type="date" name="event_date" id="event_date" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="time" class="form-label">Event Time:</label>
+                            <input type="time" name="time" id="time" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="location" class="form-label">Event Location:</label>
+                            <input type="text" name="location" id="location" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="facilitator" class="form-label">Facilitator:</label>
+                            <input type="text" name="facilitator" id="facilitator" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="image" class="form-label">Event Image:</label>
+                            <input type="file" name="image" id="image" accept="image/*" class="form-control">
+                        </div>
+                        <div class="button-container">
+                            <button type="submit" name="add_event" class="btn btn-success">Add Event</button>
+                            <button type="button" onclick="hideAddEventForm()" class="btn btn-danger">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Add Sport Form (Initially Hidden) -->
+                <div id="addSportForm" style="display:none;">
+                    <h3>Add Sport</h3>
+                    <form action="admin_dashboard.php" method="post" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="sport_name" class="form-label">Sport Name:</label>
+                            <input type="text" name="sport_name" id="sport_name" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="event_id" class="form-label">Event ID:</label>
+                            <input type="number" name="event_id" id="event_id" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sport_date" class="form-label">Sport Date:</label>
+                            <input type="date" name="sport_date" id="sport_date" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sport_time" class="form-label">Sport Time:</label>
+                            <input type="time" name="sport_time" id="sport_time" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sport_location" class="form-label">Sport Location:</label>
+                            <input type="text" name="sport_location" id="sport_location" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sport_facilitator" class="form-label">Sport Facilitator:</label>
+                            <input type="text" name="sport_facilitator" id="sport_facilitator" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sport_image" class="form-label">Sport Image:</label>
+                            <input type="file" name="sport_image" id="sport_image" accept="image/*" class="form-control">
+                        </div>
+                        <div class="button-container">
+                            <button type="submit" name="add_sport" class="btn btn-success">Add Sport</button>
+                            <button type="button" onclick="hideAddSportForm()" class="btn btn-danger">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Event Table -->
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Event ID</th>
+                                <th>Event Name</th>
+                                <th>Event Date</th>
+                                <th>Teacher ID</th>
+                                <th>Time</th>
+                                <th>Location</th>
+                                <th>Facilitator</th>
+                                <th>Image</th>
+                                <th>Actions</th>
+                                <th>Sports</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($events as $event): ?>
+                                <tr>
+                                    <td><?= $event['event_id'] ?></td>
+                                    <td><?= $event['event_name'] ?></td>
+                                    <td><?= $event['event_date'] ?></td>
+                                    <td><?= $event['teacher_id'] ?></td>
+                                    <td><?= $event['time'] ?></td>
+                                    <td><?= $event['location'] ?></td>
+                                    <td><?= $event['facilitator'] ?></td>
+                                    <td>
+                                        <?php if ($event['image']): ?>
+                                            <img src="<?= $event['image'] ?>" alt="Event Image" width="100">
+                                        <?php else: ?>
+                                            No Image
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <form action="sms_main/sms/main/edit_event_admin.php" method="get" style="display:inline;">
+                                            <input type="hidden" name="event_id" value="<?= $event['event_id'] ?>">
+                                            <button type="submit" class="btn btn-warning btn-sm">Edit</button>
+                                        </form>
+                                        <form action="admin_dashboard.php" method="post" style="display:inline;">
+                                            <input type="hidden" name="event_id" value="<?= $event['event_id'] ?>">
+                                            <button type="submit" name="delete_event" class="btn btn-danger btn-sm">Delete</button>
+                                        </form>
+                                    </td>
+                                    <td>
+                                        <button onclick="showSportsForm(<?= $event['event_id'] ?>)" class="btn btn-info btn-sm">View</button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- View Sports Form (Initially Hidden) -->
+                <div id="viewSportsForm" style="display:none;">
+                    <h3>Sports for Event ID: <span id="event_id"></span></h3>
+                    <div id="sportsList"></div>
+                    <div class="button-container">
+                        <button type="button" onclick="hideSportsForm()" class="btn btn-secondary">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function showAddEventForm() {
+                document.getElementById('addEventForm').style.display = 'block';
+            }
+
+            function hideAddEventForm() {
+                document.getElementById('addEventForm').style.display = 'none';
+            }
+
+            function showAddSportForm() {
+                document.getElementById('addSportForm').style.display = 'block';
+            }
+
+            function hideAddSportForm() {
+                document.getElementById('addSportForm').style.display = 'none';
+            }
+
+            function showSportsForm(eventId) {
+                document.getElementById('event_id').textContent = eventId;
+                fetchSports(eventId);
+                document.getElementById('viewSportsForm').style.display = 'block';
+            }
+
+            function hideSportsForm() {
+                document.getElementById('viewSportsForm').style.display = 'none';
+            }
+
+            function fetchSports(eventId) {
+                fetch('get_sports.php?event_id=' + eventId)
+                    .then(response => response.json())
+                    .then(data => {
+                        let sportsList = '';
+                        data.forEach(sport => {
+                            sportsList += `
+                                <div class="sport-item">
+                                    <div class="sport-details">
+                                        <p>Sport Name: ${sport.sport_name}</p>
+                                        <p>Sport Date: ${sport.sport_date}</p>
+                                        <p>Sport Time: ${sport.sport_time}</p>
+                                        <p>Sport Location: ${sport.sport_location}</p>
+                                        <p>Sport Facilitator: ${sport.sport_facilitator}</p>
+                                        <p>Sport Image: <img src="${sport.sport_image}" alt="Sport Image" width="100"></p>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        document.getElementById('sportsList').innerHTML = sportsList;
+                    })
+                    .catch(error => console.error('Error fetching sports:', error));
+            }
+        </script>
+        <!-- Add Bootstrap JS -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+    </html>

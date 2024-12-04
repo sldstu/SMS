@@ -153,6 +153,7 @@ ob_end_flush(); // Flush the buffered output after headers
                                 <a href="#" class="dropdown-item">Setting</a>
                                 <a href="../MAIN/auth/logout.php" class="dropdown-item">Logout</a>
                             </div>
+                            <a href="../MAIN/auth/logout.php" class="dropdown-item">Logout</a>
                         </li>
                     </ul>
                 </div>
