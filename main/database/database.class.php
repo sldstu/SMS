@@ -4,7 +4,7 @@ class Database {
     private $username = 'root';
     private $password = '';
     // private $db = 'sports_management';
-    private $db = 'sms_db';
+    private $db = 'system';
     protected $connection;
 
     public function connect() {

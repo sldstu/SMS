@@ -32,7 +32,6 @@ if ($role === 'admin') {
         ['name' => 'Users', 'icon' => 'fa-solid fa-user', 'page' => 'admin_users'],
         ['name' => 'Sports', 'icon' => 'fa-solid fa-medal', 'page' => 'admin_sports'],
         ['name' => 'Events', 'icon' => 'fa-solid fa-calendar-days', 'page' => 'admin_events'],
-        ['name' => 'Course and Sections', 'icon' => 'bi bi-mortarboard-fill', 'page' => 'admin_course_section'],
         ['name' => 'Registration', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_registration'], // New item
     ];
     
@@ -134,26 +133,26 @@ ob_end_flush(); // Flush the buffered output after headers
                     <span class="navbar-toggler-icon"></span>
                 </button>
 
-                <!-- Search Bar -->
+                <!-- Search Bar
                 <form class="d-flex ms-auto me-3" role="search">
                     <input class="form-control me-2" type="search" placeholder="Search..." aria-label="Search">
                     <button class="btn btn-outline-primary" type="submit">
                         <i class="fa-solid fa-magnifying-glass"></i>
                     </button>
-                </form>
+                </form> -->
 
                 <div class="navbar-collapse navbar">
                     <ul class="navbar-nav">
                         <li class="nav-item dropdown">
-                            <a href="#" data-bs-toggle="dropdown" class="nav-icon pe-md-0">
+                            <!-- <a href="#" data-bs-toggle="dropdown" class="nav-icon pe-md-0">
                                 <img src="image/profile.jpg" class="avatar img-fluid rounded">
-                            </a>
-                            <div class="dropdown-menu dropdown-menu-end">
+                            </a> -->
+                            <!-- <div class="dropdown-menu dropdown-menu-end">
                                 <a href="#" class="dropdown-item">Profile</a>
                                 <a href="#" class="dropdown-item">Setting</a>
                                 <a href="../MAIN/auth/logout.php" class="dropdown-item">Logout</a>
-                            </div>
-                            <a href="../MAIN/auth/logout.php" class="dropdown-item">Logout</a>
+                            </div> -->
+                            <button class="btn btn-danger"><a href="../MAIN/auth/logout.php" class="dropdown-item">Logout</a></button>
                         </li>
                     </ul>
                 </div>

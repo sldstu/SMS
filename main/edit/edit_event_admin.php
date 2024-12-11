@@ -1,147 +1,150 @@
 <?php
 session_start();
+
 if ($_SESSION['role'] !== 'admin') {
-    header('Location: login.php');
+    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
     exit();
 }
 
-require_once 'database.class.php';
+require_once __DIR__ . '../../database/database.class.php';
 $conn = (new Database())->connect();
 
-// Initialize variables
-$event_name = '';
-$event_date = '';
-$teacher_id = '';
-$time = '';
-$location = '';
-$facilitator = '';
-$image = '';  // This will hold the current image path
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $event_id = $_POST['event_id'];
+    $event_name = $_POST['event_name'];
+    $event_description = $_POST['event_description'];
+    $event_date = $_POST['event_date'];
+    $event_time = $_POST['event_time'];
+    $event_location = $_POST['event_location'];
 
-// Fetch the event details if event_id is provided
-if (isset($_GET['event_id'])) {
+    // Handle image update if provided
+    $queryStr = "UPDATE events SET 
+                 event_name = :event_name, 
+                 event_description = :event_description, 
+                 event_date = :event_date, 
+                 event_time = :event_time, 
+                 event_location = :event_location";
+
+    if (!empty($_FILES['event_image']['name'])) {
+        $imageData = base64_encode(file_get_contents($_FILES['event_image']['tmp_name']));
+        $queryStr .= ", event_image = :event_image";
+    }
+
+    $queryStr .= " WHERE event_id = :event_id";
+
+    $query = $conn->prepare($queryStr);
+    $query->bindParam(':event_name', $event_name);
+    $query->bindParam(':event_description', $event_description);
+    $query->bindParam(':event_date', $event_date);
+    $query->bindParam(':event_time', $event_time);
+    $query->bindParam(':event_location', $event_location);
+    $query->bindParam(':event_id', $event_id);
+
+    if (!empty($_FILES['event_image']['name'])) {
+        $query->bindParam(':event_image', $imageData);
+    }
+
+    if ($query->execute()) {
+        // After successful event creation/update
+        if ($eventId) {
+            // Clear existing facilitators first if editing
+            $clearStmt = $conn->prepare("DELETE FROM event_facilitators WHERE event_id = :event_id");
+            $clearStmt->execute([':event_id' => $eventId]);
+
+            // Add new facilitators
+            if (isset($_POST['facilitators'])) {
+                $facilitators = json_decode($_POST['facilitators']);
+                $insertStmt = $conn->prepare("INSERT INTO event_facilitators (event_id, user_id) VALUES (:event_id, :user_id)");
+                foreach ($facilitators as $facilitatorId) {
+                    $insertStmt->execute([
+                        ':event_id' => $eventId,
+                        ':user_id' => $facilitatorId
+                    ]);
+                }
+            }
+        }
+
+
+        echo json_encode(['success' => true, 'message' => 'Event updated successfully']);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Failed to update event']);
+    }
+    exit();
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['event_id'])) {
     $event_id = $_GET['event_id'];
-    
     $query = $conn->prepare("SELECT * FROM events WHERE event_id = :event_id");
     $query->bindParam(':event_id', $event_id);
     $query->execute();
     $event = $query->fetch(PDO::FETCH_ASSOC);
-    
+
     if ($event) {
-        // Assign event values to variables
-        $event_name = $event['event_name'];
-        $event_date = $event['event_date'];
-        $teacher_id = $event['teacher_id'];
-        $time = $event['time'];
-        $location = $event['location'];
-        $facilitator = $event['facilitator'];
-        $image = $event['image'];  // Store current image
+?>
+        <form id="editEventForm" class="needs-validation" novalidate enctype="multipart/form-data">
+            <input type="hidden" name="event_id" value="<?= htmlspecialchars($event['event_id']) ?>">
+
+            <div class="mb-3">
+                <label for="event_name" class="form-label">Event Name</label>
+                <input type="text" class="form-control" id="event_name" name="event_name" value="<?= htmlspecialchars($event['event_name']) ?>" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="event_description" class="form-label">Event Description</label>
+                <textarea class="form-control" id="event_description" name="event_description" rows="3" required><?= htmlspecialchars($event['event_description']) ?></textarea>
+            </div>
+
+            <div class="mb-3">
+                <label for="event_date" class="form-label">Event Date</label>
+                <input type="date" class="form-control" id="event_date" name="event_date" value="<?= htmlspecialchars($event['event_date']) ?>" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="event_time" class="form-label">Event Time</label>
+                <input type="time" class="form-control" id="event_time" name="event_time" value="<?= htmlspecialchars($event['event_time']) ?>" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="event_location" class="form-label">Event Location</label>
+                <input type="text" class="form-control" id="event_location" name="event_location" value="<?= htmlspecialchars($event['event_location']) ?>" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="event_image" class="form-label">Event Image</label>
+                <input type="file" class="form-control" id="event_image" name="event_image">
+                <div class="text-muted">Leave empty if no image update is required.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+        </form>
+        <script>
+            document.getElementById('editEventForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+
+                fetch('edit_event_admin.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Event updated successfully!');
+                            location.reload(); // Refresh the page to reflect changes
+                        } else {
+                            alert(data.message || 'Error updating event.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred. Please try again.');
+                    });
+            });
+        </script>
+<?php
     } else {
         echo "Event not found.";
-        exit();
     }
-}
-
-// Update event if form is submitted
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $event_id = $_POST['event_id'];
-    $event_name = $_POST['event_name'];
-    $event_date = $_POST['event_date'];
-    $teacher_id = $_POST['teacher_id'];
-    $time = $_POST['time'];
-    $location = $_POST['location'];
-    $facilitator = $_POST['facilitator'];
-
-    // Handle image upload if a new image is uploaded
-    if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
-        $targetDir = "uploads/";
-        $imageFileName = basename($_FILES['image']['name']);
-        $targetFilePath = $targetDir . $imageFileName;
-
-        if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFilePath)) {
-            $image = $targetFilePath;  // Update image path
-        } else {
-            echo "Error uploading image.";
-            exit();
-        }
-    }
-
-    // Update event details in the database
-    $query = $conn->prepare("
-        UPDATE events 
-        SET event_name = :event_name, 
-            event_date = :event_date, 
-            teacher_id = :teacher_id, 
-            time = :time, 
-            location = :location, 
-            facilitator = :facilitator
-            " . ($image ? ", image = :image" : "") . "
-        WHERE event_id = :event_id
-    ");
-
-    $query->bindParam(':event_name', $event_name);
-    $query->bindParam(':event_date', $event_date);
-    $query->bindParam(':teacher_id', $teacher_id);
-    $query->bindParam(':time', $time);
-    $query->bindParam(':location', $location);
-    $query->bindParam(':facilitator', $facilitator);
-    if ($image) {
-        $query->bindParam(':image', $image);
-    }
-    $query->bindParam(':event_id', $event_id);
-    $query->execute();
-
-    header("Location: admin_dashboard.php");
     exit();
 }
 ?>
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Edit Event</title>
-    <link rel="stylesheet" href="css/edit-event.css">
-</head>
-<body>
-    <?php require_once 'includes/header.php'; ?>
-    
-    <h1>Edit Event</h1>
-    
-    <form action="edit_event_admin.php" method="post" enctype="multipart/form-data">
-        <input type="hidden" name="event_id" value="<?= htmlspecialchars($event_id) ?>">
-
-        <label for="event_name">Event Name:</label>
-        <input type="text" name="event_name" id="event_name" value="<?= htmlspecialchars($event_name) ?>" required><br>
-
-        <label for="event_date">Event Date:</label>
-        <input type="date" name="event_date" id="event_date" value="<?= htmlspecialchars($event_date) ?>" required><br>
-
-        <label for="teacher_id">Teacher ID:</label>
-        <input type="number" name="teacher_id" id="teacher_id" value="<?= htmlspecialchars($teacher_id) ?>" required><br>
-
-        <label for="time">Event Time:</label>
-        <input type="time" name="time" id="time" value="<?= htmlspecialchars($time) ?>" required><br>
-
-        <label for="location">Event Location:</label>
-        <input type="text" name="location" id="location" value="<?= htmlspecialchars($location) ?>" required><br>
-
-        <label for="facilitator">Facilitator:</label>
-        <input type="text" name="facilitator" id="facilitator" value="<?= htmlspecialchars($facilitator) ?>" required><br>
-
-        <!-- Image Upload -->
-        <label for="image">Event Image (Optional):</label>
-        <input type="file" name="image" id="image" accept="image/*"><br><br>
-
-        <?php if ($image): ?>
-            <p>Current Image:</p>
-            <img src="<?= htmlspecialchars($image) ?>" alt="Event Image" style="max-width: 200px;"><br>
-        <?php endif; ?>
-
-        <button type="submit">Update Event</button>
-        <button type="button" onclick="window.history.back()">Cancel</button>
-    </form>
-    
-    <?php require_once 'includes/footer.php'; ?>
-</body>
-</html>
-                

@@ -9,15 +9,15 @@ class User {
         $this->conn = $db->connect();
     }
 
-    public function signup($username, $password, $role, $first_name, $last_name) {
+    public function signup($username, $password, $email) {
         try {
-            $sql = 'INSERT INTO users (username, password, role, first_name, last_name) VALUES (:username, :password, :role, :first_name, :last_name)';
+            $sql = 'INSERT INTO users (username, password, role, email) VALUES (:username, :password, :role, :email)';
             $query = $this->conn->prepare($sql);
+            $query->bindParam(':email', $email);
             $query->bindParam(':username', $username);
             $query->bindParam(':password', password_hash($password, PASSWORD_BCRYPT));
-            $query->bindParam(':role', $role);
-            $query->bindParam(':first_name', $first_name);
-            $query->bindParam(':last_name', $last_name);
+            $default_role = 'student'; // Default role is student
+            $query->bindParam(':role', $default_role);
             return $query->execute();
         } catch (PDOException $e) {
             echo "Signup Error: " . $e->getMessage();
@@ -99,6 +99,19 @@ class User {
             return $query->execute();
         } catch (PDOException $e) {
             echo "Update Error: " . $e->getMessage();
+            return false;
+        }
+    }
+
+    public function changeRole($user_id, $role) {
+        try {
+            $sql = 'UPDATE users SET role = :role WHERE user_id = :user_id';
+            $query = $this->conn->prepare($sql);
+            $query->bindParam(':user_id', $user_id);
+            $query->bindParam(':role', $role);
+            return $query->execute();
+        } catch (PDOException $e) {
+            echo "Change Role Error: " . $e->getMessage();
             return false;
         }
     }
