@@ -13,58 +13,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $event_id = $_POST['event_id'];
     $event_name = $_POST['event_name'];
     $event_description = $_POST['event_description'];
-    $event_date = $_POST['event_date'];
-    $event_time = $_POST['event_time'];
+    $event_start_date = $_POST['event_start_date'];
+    $event_end_date = $_POST['event_end_date'];
     $event_location = $_POST['event_location'];
 
     // Handle image update if provided
     $queryStr = "UPDATE events SET 
                  event_name = :event_name, 
                  event_description = :event_description, 
-                 event_date = :event_date, 
-                 event_time = :event_time, 
+                 event_start_date = :event_start_date, 
+                 event_end_date = :event_end_date, 
                  event_location = :event_location";
 
     if (!empty($_FILES['event_image']['name'])) {
         $imageData = base64_encode(file_get_contents($_FILES['event_image']['tmp_name']));
         $queryStr .= ", event_image = :event_image";
     }
-
+    
     $queryStr .= " WHERE event_id = :event_id";
-
+    
     $query = $conn->prepare($queryStr);
     $query->bindParam(':event_name', $event_name);
     $query->bindParam(':event_description', $event_description);
-    $query->bindParam(':event_date', $event_date);
-    $query->bindParam(':event_time', $event_time);
+    $query->bindParam(':event_start_date', $event_start_date);
+    $query->bindParam(':event_end_date', $event_end_date);
     $query->bindParam(':event_location', $event_location);
     $query->bindParam(':event_id', $event_id);
-
+    
     if (!empty($_FILES['event_image']['name'])) {
         $query->bindParam(':event_image', $imageData);
     }
 
     if ($query->execute()) {
-        // After successful event creation/update
-        if ($eventId) {
-            // Clear existing facilitators first if editing
-            $clearStmt = $conn->prepare("DELETE FROM event_facilitators WHERE event_id = :event_id");
-            $clearStmt->execute([':event_id' => $eventId]);
-
-            // Add new facilitators
-            if (isset($_POST['facilitators'])) {
-                $facilitators = json_decode($_POST['facilitators']);
-                $insertStmt = $conn->prepare("INSERT INTO event_facilitators (event_id, user_id) VALUES (:event_id, :user_id)");
-                foreach ($facilitators as $facilitatorId) {
-                    $insertStmt->execute([
-                        ':event_id' => $eventId,
-                        ':user_id' => $facilitatorId
-                    ]);
-                }
-            }
-        }
-
-
         echo json_encode(['success' => true, 'message' => 'Event updated successfully']);
     } else {
         echo json_encode(['success' => false, 'message' => 'Failed to update event']);
@@ -80,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['event_id'])) {
     $event = $query->fetch(PDO::FETCH_ASSOC);
 
     if ($event) {
-?>
+        ?>
         <form id="editEventForm" class="needs-validation" novalidate enctype="multipart/form-data">
             <input type="hidden" name="event_id" value="<?= htmlspecialchars($event['event_id']) ?>">
 
@@ -95,13 +75,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['event_id'])) {
             </div>
 
             <div class="mb-3">
-                <label for="event_date" class="form-label">Event Date</label>
-                <input type="date" class="form-control" id="event_date" name="event_date" value="<?= htmlspecialchars($event['event_date']) ?>" required>
+                <label for="event_start_date" class="form-label">Event Start Date</label>
+                <input type="date" class="form-control" id="event_start_date" name="event_start_date" value="<?= htmlspecialchars($event['event_start_date']) ?>" required>
             </div>
 
             <div class="mb-3">
-                <label for="event_time" class="form-label">Event Time</label>
-                <input type="time" class="form-control" id="event_time" name="event_time" value="<?= htmlspecialchars($event['event_time']) ?>" required>
+                <label for="event_end_date" class="form-label">Event End Date</label>
+                <input type="date" class="form-control" id="event_end_date" name="event_end_date" value="<?= htmlspecialchars($event['event_end_date']) ?>" required>
             </div>
 
             <div class="mb-3">
@@ -118,30 +98,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['event_id'])) {
             <button type="submit" class="btn btn-primary">Save Changes</button>
         </form>
         <script>
-            document.getElementById('editEventForm').addEventListener('submit', function(e) {
+            document.getElementById('editEventForm').addEventListener('submit', function (e) {
                 e.preventDefault();
                 const formData = new FormData(this);
 
                 fetch('edit_event_admin.php', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert('Event updated successfully!');
-                            location.reload(); // Refresh the page to reflect changes
-                        } else {
-                            alert(data.message || 'Error updating event.');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        alert('An error occurred. Please try again.');
-                    });
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Event updated successfully!');
+                        location.reload(); // Refresh the page to reflect changes
+                    } else {
+                        alert(data.message || 'Error updating event.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred. Please try again.');
+                });
             });
         </script>
-<?php
+        <?php
     } else {
         echo "Event not found.";
     }

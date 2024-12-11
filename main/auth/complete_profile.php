@@ -19,9 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $cor = file_get_contents($_FILES['cor']['tmp_name']);
     $id_image = file_get_contents($_FILES['id_image']['tmp_name']);
-    #$medcert = file_get_contents($_FILES['medcert']['tmp_name']);
+    $medcert = file_get_contents($_FILES['medcert']['tmp_name']);
 
-    $query = $conn->prepare("INSERT INTO student_details (user_id, sex, course, section, birthday, address, contact_info, cor, id_image) VALUES (:user_id, :sex, :course, :section, :birthday, :address, :contact_info, :cor, :id_image)");
+    $query = $conn->prepare("INSERT INTO student_details (user_id, sex, course, section, birthday, address, contact_info, cor, id_image, medcert) VALUES (:user_id, :sex, :course, :section, :birthday, :address, :contact_info, :cor, :id_image, :medcert)");
     $query->bindParam(':user_id', $user_id);
     $query->bindParam(':sex', $sex);
     $query->bindParam(':course', $course);
@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $query->bindParam(':contact_info', $contact_info);
     $query->bindParam(':cor', $cor, PDO::PARAM_LOB);
     $query->bindParam(':id_image', $id_image, PDO::PARAM_LOB);
-    #$query->bindParam(':medcert', $medcert, PDO::PARAM_LOB);
+    $query->bindParam(':medcert', $medcert, PDO::PARAM_LOB);
 
     if ($query->execute()) {
         $_SESSION['profile_incomplete'] = false;
@@ -60,44 +60,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <?php endif; ?>
             <form action="complete_profile.php" method="post" enctype="multipart/form-data">
                 <div class="mb-3">
-                    <label for="full_name" class="form-label">Full Name</label>
-                    <input type="text" class="form-control" id="full_name" name="full_name" required>
-                </div>
-                <div class="mb-3">
-                    <label for="last_name" class="form-label">Last Name</label>
-                    <input type="text" class="form-control" id="last_name" name="last_name" required>
+                    <label for="cor" class="form-label">COR</label>
+                    <input type="file" class="form-control" id="cor" name="cor" required>
                 </div>
                 <div class="mb-3">
                     <label for="id_image" class="form-label">ID</label>
                     <input type="file" class="form-control" id="id_image" name="id_image" required>
                 </div>
-                <!--<div class="mb-3">
+                <div class="mb-3">
                     <label for="medcert" class="form-label">Medical Certificate</label>
                     <input type="file" class="form-control" id="medcert" name="medcert" required>
-                </div>-->
+                </div>
                 <div class="mb-3">
                     <label for="sex" class="form-label">Sex</label>
                     <select class="form-select" id="sex" name="sex" required>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
-                        <option value="Female">Others</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="course" class="form-label">Course</label>
-                    <select class="form-select" id="course" name="course" required>
-                        <option value="ACT">ACT</option>
-                        <option value="CS">CS</option>
-                        <option value="IT">IT</option>
                     </select>
                 </div>
                 <div class="mb-3">
                     <label for="section" class="form-label">Section</label>
-                    <select class="form-select" id="section" name="section" required>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                    </select>
+                    <input type="text" class="form-control" id="section" name="section" required>
                 </div>
                 <div class="mb-3">
                     <label for="birthday" class="form-label">Birthday</label>

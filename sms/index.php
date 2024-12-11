@@ -23,7 +23,8 @@ if ($role === 'admin') {
         'admin_sports' => '../MAIN/roles/admin_/sports.php',
         'admin_events' => '../MAIN/roles/admin_/events.php',
         'admin_course_section' => '../MAIN/roles/admin_/course_section.php',
-        'admin_registration' => '../MAIN/roles/admin_/registration.php', // New page
+        'admin_facilitator' => '../MAIN/roles/admin_/facilitator.php', // New page
+        'admin_registration' => '../MAIN/roles/admin_/registrations.php', // New page
         '404' => 'MAIN/roles/guest/404.php',
     ];
     
@@ -32,10 +33,11 @@ if ($role === 'admin') {
         ['name' => 'Users', 'icon' => 'fa-solid fa-user', 'page' => 'admin_users'],
         ['name' => 'Sports', 'icon' => 'fa-solid fa-medal', 'page' => 'admin_sports'],
         ['name' => 'Events', 'icon' => 'fa-solid fa-calendar-days', 'page' => 'admin_events'],
-        ['name' => 'Registration', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_registration'], // New item
+        ['name' => 'Facilitator', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_facilitator'], // New item
+        ['name' => 'Registrations', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_registration'], // New item
     ];
     
-} elseif ($role === 'teacher') {
+} elseif ($role === 'moderator') {
     $allowed_pages = [
         'mod_dashboard' => '../MAIN/roles/moderator_/dashboard_mod.php',
         'mod_events' => '../MAIN/roles/moderator_/events_mod.php',
@@ -51,12 +53,14 @@ if ($role === 'admin') {
     ];
 } elseif ($role === 'student') {
     $allowed_pages = [
+        'student_dashboard' => '../MAIN/roles/student_/student_dashboard.php',
         'student_events' => '../MAIN/roles/student_/events_stud.php',
         'student_regSports' => '../MAIN/roles/student_/regSports.php',
         'student_sports' => '../MAIN/roles/student_/sports_stud.php',
         '404' => 'MAIN/roles/guest/404.php',
     ];
     $sidebar_items = [
+        ['name' => 'dashboard', 'icon' => 'fa-solid fa-medal', 'page' => 'student_dashboard'],
         ['name' => 'Events', 'icon' => 'fa-solid fa-calendar-days', 'page' => 'student_events'],
         ['name' => 'Registered Sports', 'icon' => 'fa-solid fa-user-check', 'page' => 'student_regSports'],
         ['name' => 'Sports', 'icon' => 'fa-solid fa-medal', 'page' => 'student_sports'],

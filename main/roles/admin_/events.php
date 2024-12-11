@@ -12,7 +12,7 @@ require_once __DIR__ . '/../../database/database.class.php';
 $conn = (new Database())->connect();
 
 // Fetch all events
-$query = $conn->prepare("SELECT event_id, event_name, event_description, event_date, event_time, event_location, event_image FROM events");
+$query = $conn->prepare("SELECT event_id, event_name, event_description, event_start_date, event_end_date, event_location, event_image FROM events");
 $query->execute();
 $events = $query->fetchAll(PDO::FETCH_ASSOC);
 
@@ -46,8 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['event_name'])) {
         $eventName = $_POST['event_name'];
         $eventdescription = $_POST['event_description'];
-        $eventDate = $_POST['event_date'];
-        $eventTime = $_POST['event_time'];
+        $eventDate = $_POST['event_start_date'];
+        $eventTime = $_POST['event_end_date'];
         $eventLocation = isset($_POST['event_location']) ? $_POST['event_location'] : null; // Ensure location is captured
 
         // Handle image upload as base64
@@ -57,11 +57,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Insert the event into the database
-        $query = $conn->prepare("INSERT INTO events (event_name, event_description, event_date, event_time, event_location, event_image) VALUES (:event_name, :event_description, :event_date, :event_time, :event_location, :event_image)");
+        $query = $conn->prepare("INSERT INTO events (event_name, event_description, event_start_date, event_end_date, event_location, event_image) VALUES (:event_name, :event_description, :event_start_date, :event_end_date, :event_location, :event_image)");
         $query->bindParam(':event_name', $eventName);
         $query->bindParam(':event_description', $eventdescription);
-        $query->bindParam(':event_date', $eventDate);
-        $query->bindParam(':event_time', $eventTime);
+        $query->bindParam(':event_start_date', $eventDate);
+        $query->bindParam(':event_end_date', $eventTime);
         $query->bindParam(':event_location', $eventLocation); // Ensure location is passed correctly
         $query->bindParam(':event_image', $imageData); // Store the base64 encoded image
         $query->execute();
@@ -72,8 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'event_id' => $newEventId,
             'event_name' => $eventName,
             'event_description' => $eventdescription,
-            'event_date' => $eventDate,
-            'event_time' => $eventTime,
+            'event_start_date' => $eventDate,
+            'event_end_date' => $eventTime,
             'event_location' => $eventLocation, // Ensure location is returned
             'event_image' => 'events.php?event_image_id=' . $newEventId, // Image URL
         ];
@@ -99,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $eventId = $_POST['event_id'];
         $eventName = $_POST['event_name'];
         $eventdescription = $_POST['event_description'];
-        $eventDate = $_POST['event_date'];
-        $eventTime = $_POST['event_time'];
+        $eventDate = $_POST['event_start_date'];
+        $eventTime = $_POST['event_end_date'];
         $eventLocation = isset($_POST['event_location']) ? $_POST['event_location'] : null; // Ensure location is passed correctly
 
         // Validate inputs (check if any input is empty)
@@ -109,11 +109,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
 
-        $query = $conn->prepare("UPDATE events SET event_name = :event_name, event_description = :event_description, event_date = :event_date, event_time = :event_time, event_location = :event_location WHERE event_id = :event_id");
+        $query = $conn->prepare("UPDATE events SET event_name = :event_name, event_description = :event_description, event_start_date = :event_start_date, event_end_date = :event_end_date, event_location = :event_location WHERE event_id = :event_id");
         $query->bindParam(':event_name', $eventName);
         $query->bindParam(':event_description', $eventdescription);
-        $query->bindParam(':event_date', $eventDate);
-        $query->bindParam(':event_time', $eventTime);
+        $query->bindParam(':event_start_date', $eventDate);
+        $query->bindParam(':event_end_date', $eventTime);
         $query->bindParam(':event_location', $eventLocation); // Ensure location is updated correctly
         $query->bindParam(':event_id', $eventId, PDO::PARAM_INT);
         $query->execute();
@@ -254,11 +254,13 @@ if (!$events) {
                 <div class="modal-body">
                     <img id="event-image" alt="Event Image" class="mb-4">
                     <p><strong>Description:</strong> <span id="event-description"></span></p>
-                    <p><strong>Time:</strong> <span id="event-time"></span></p>
+                    <p><strong>Start Date:</strong> <span id="event-start-date"></span></p>
+                    <p><strong>End Date:</strong> <span id="event-end-date"></span></p>
                     <p><strong>Location:</strong> <span id="event-location"></span></p>
-                    <p><strong>Date:</strong> <span id="event-date"></span></p>
+                    
                 </div>
                 <div class="modal-footer">
+
                     <!-- Change this line to use the current event's ID -->
                     <button class="btn btn-warning btn-sm edit-event-btn px-3" id="editEventBtn">Edit</button>
                 </div>
@@ -301,12 +303,12 @@ if (!$events) {
                             <textarea class="form-control" id="event_description" name="event_description" rows="3"></textarea>
                         </div>
                         <div class="mb-3">
-                            <label for="event_date" class="form-label">Event Date</label>
-                            <input type="date" class="form-control" id="event_date" name="event_date">
+                            <label for="event_start_date" class="form-label">Event Start Date</label>
+                            <input type="date" class="form-control" id="event_start_date" name="event_start_date">
                         </div>
                         <div class="mb-3">
-                            <label for="event_time" class="form-label">Event Time</label>
-                            <input type="time" class="form-control" id="event_time" name="event_time">
+                            <label for="event_end_date" class="form-label">Event End Date</label>
+                            <input type="date" class="form-control" id="event_end_date" name="event_end_date">
                         </div>
                         <div class="mb-3">
                             <label for="event_location" class="form-label">Location</label>
@@ -333,9 +335,9 @@ if (!$events) {
             const event = eventDetails.find(e => e.event_id == eventId);
             if (event) {
                 document.getElementById('event-name').innerText = event.event_name;
-                document.getElementById('event-time').innerText = event.event_time;
+                document.getElementById('event-end-date').innerText = event.event_end_date;
                 document.getElementById('event-location').innerText = event.event_location;
-                document.getElementById('event-date').innerText = event.event_date;
+                document.getElementById('event-start-date').innerText = event.event_start_date;
                 document.getElementById('event-description').innerText = event.event_description;
                 document.getElementById('event-image').src = 'data:image/jpeg;base64,' + event.event_image;
                 // Add this line to set the current event ID
@@ -355,8 +357,8 @@ if (!$events) {
                         // Populate Edit Form with event data
                         document.getElementById('edit_event_name').value = event.event_name;
                         document.getElementById('edit_event_description').value = event.event_description;
-                        document.getElementById('edit_event_date').value = event.event_date;
-                        document.getElementById('edit_event_time').value = event.event_time;
+                        document.getElementById('edit_event_date').value = event.event_start_date;
+                        document.getElementById('edit_event_time').value = event.event_end_date;
                         document.getElementById('edit_event_location').value = event.event_location;
                         document.getElementById('edit_event_id').value = event.event_id;
                     }

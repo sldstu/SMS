@@ -20,6 +20,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['user_id'] = $user['user_id'];
         $_SESSION['username'] = $user['username'];
         $_SESSION['role'] = $user['role'];
+        $_SESSION['first_name'] = $user['first_name'];
+        $_SESSION['last_name'] = $user['last_name'];
+
+        // Check if profile is incomplete in the student_details table
+        $query = $conn->prepare("SELECT * FROM student_details WHERE user_id = :user_id");
+        $query->bindParam(':user_id', $user['user_id']);
+        $query->execute();
+        $student_details = $query->fetch(PDO::FETCH_ASSOC);
+
+        if ($user['role'] === 'student' && !$student_details) {
+            header("Location: complete_profile.php");
+            exit();
+        }
+
         header("Location: ../../SMS/index.php");
         exit();
     } else {
@@ -30,16 +44,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet"> <!-- Include Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="../../sms/css/style.css">
 </head>
-
 <body>
     <div class="container d-flex justify-content-center align-items-center vh-100">
         <div class="card shadow p-4" style="width: 100%; max-width: 400px;">
@@ -71,5 +83,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../../sms/js/script.js"></script>
 </body>
-
 </html>
