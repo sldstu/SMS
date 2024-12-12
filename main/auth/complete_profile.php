@@ -10,18 +10,18 @@ $conn = (new Database())->connect();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id = $_SESSION['user_id'];
-    $sex = $_POST['sex'];
-    $course = $_POST['course'];
-    $section = $_POST['section'];
-    $birthday = $_POST['birthday'];
-    $address = $_POST['address'];
-    $contact_info = $_POST['contact_info'];
+    $sex = $_POST['sex'] ?? null;
+    $course = $_POST['course'] ?? null;
+    $section = $_POST['section'] ?? null;
+    $birthday = $_POST['birthday'] ?? null;
+    $address = $_POST['address'] ?? null;
+    $contact_info = $_POST['contact_info'] ?? null;
 
-    $cor = file_get_contents($_FILES['cor']['tmp_name']);
-    $id_image = file_get_contents($_FILES['id_image']['tmp_name']);
-    $medcert = file_get_contents($_FILES['medcert']['tmp_name']);
+    $cor = !empty($_FILES['cor']['tmp_name']) ? file_get_contents($_FILES['cor']['tmp_name']) : null;
+    $id_image = !empty($_FILES['id_image']['tmp_name']) ? file_get_contents($_FILES['id_image']['tmp_name']) : null;
+    $medcert = !empty($_FILES['medcert']['tmp_name']) ? file_get_contents($_FILES['medcert']['tmp_name']) : null;
 
-    $query = $conn->prepare("INSERT INTO student_details (user_id, sex, course, section, birthday, address, contact_info, cor, id_image, medcert) VALUES (:user_id, :sex, :course, :section, :birthday, :address, :contact_info, :cor, :id_image, :medcert)");
+    $query = $conn->prepare("INSERT INTO student_requirements (user_id, sex, course, section, birthday, address, contact_info, cor, id_image, medcert) VALUES (:user_id, :sex, :course, :section, :birthday, :address, :contact_info, :cor, :id_image, :medcert)");
     $query->bindParam(':user_id', $user_id);
     $query->bindParam(':sex', $sex);
     $query->bindParam(':course', $course);
@@ -61,42 +61,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form action="complete_profile.php" method="post" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="cor" class="form-label">COR</label>
-                    <input type="file" class="form-control" id="cor" name="cor" required>
+                    <input type="file" class="form-control" id="cor" name="cor" >
                 </div>
                 <div class="mb-3">
                     <label for="id_image" class="form-label">ID</label>
-                    <input type="file" class="form-control" id="id_image" name="id_image" required>
+                    <input type="file" class="form-control" id="id_image" name="id_image" >
                 </div>
                 <div class="mb-3">
                     <label for="medcert" class="form-label">Medical Certificate</label>
-                    <input type="file" class="form-control" id="medcert" name="medcert" required>
+                    <input type="file" class="form-control" id="medcert" name="medcert" >
                 </div>
                 <div class="mb-3">
                     <label for="sex" class="form-label">Sex</label>
-                    <select class="form-select" id="sex" name="sex" required>
+                    <select class="form-select" id="sex" name="sex" >
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                     </select>
                 </div>
                 <div class="mb-3">
                     <label for="section" class="form-label">Section</label>
-                    <input type="text" class="form-control" id="section" name="section" required>
+                    <input type="text" class="form-control" id="section" name="section">
                 </div>
                 <div class="mb-3">
                     <label for="birthday" class="form-label">Birthday</label>
-                    <input type="date" class="form-control" id="birthday" name="birthday" required>
+                    <input type="date" class="form-control" id="birthday" name="birthday">
                 </div>
                 <div class="mb-3">
                     <label for="address" class="form-label">Address</label>
-                    <input type="text" class="form-control" id="address" name="address" required>
+                    <input type="text" class="form-control" id="address" name="address" >
                 </div>
                 <div class="mb-3">
                     <label for="contact_info" class="form-label">Contact Info</label>
-                    <input type="text" class="form-control" id="contact_info" name="contact_info" required>
+                    <input type="text" class="form-control" id="contact_info" name="contact_info" >
                 </div>
                 <div class="d-grid">
                     <button type="submit" class="btn btn-primary">Save</button>
                 </div>
+                <br>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary" style="background-color:rgb(233, 22, 22); font-size: 16px; padding: 10px 20px;">Skip</button>
+                </div>
+
+                <br>
+                <br>
             </form>
         </div>
     </div>

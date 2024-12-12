@@ -11,12 +11,16 @@ $conn = (new Database())->connect();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id = $_POST['user_id'];
     $username = $_POST['username'];
+    $email = $_POST['email'];
+    $middle_name = $_POST['middle_name'];
     $role = $_POST['role'];
     $first_name = $_POST['first_name'];
     $last_name = $_POST['last_name'];
 
-    $query = $conn->prepare("UPDATE users SET username = :username, role = :role, first_name = :first_name, last_name = :last_name WHERE user_id = :user_id");
+    $query = $conn->prepare("UPDATE users SET username = :username, email = :email, middle_name = :middle_name, role = :role, first_name = :first_name, last_name = :last_name WHERE user_id = :user_id");
     $query->bindParam(':username', $username);
+    $query->bindParam(':email', $email);
+    $query->bindParam(':middle_name', $middle_name);
     $query->bindParam(':role', $role);
     $query->bindParam(':first_name', $first_name);
     $query->bindParam(':last_name', $last_name);
@@ -37,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $query->fetch(PDO::FETCH_ASSOC);
 
     if ($user) {
-        ?>
+?>
         <!-- Include Bootstrap CSS -->
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
         <link rel="stylesheet" href="/SMS/css/style.css">
@@ -55,12 +59,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="email" name="email" value="<?= htmlspecialchars($user['email']) ?>" required>
+                <div class="invalid-feedback">
+                    Please provide a valid email address.
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="middle_name" class="form-label">Middle Name (Optional)</label>
+                <input type="text" class="form-control" id="middle_name" name="middle_name" value="<?= htmlspecialchars($user['middle_name']) ?>">
+            </div>
+
+            <div class="mb-3">
                 <label for="role" class="form-label">Role</label>
-                <!-- <input type="text" class="form-control" id="role" name="role" value="<?= htmlspecialchars($user['role']) ?>" required> -->
-                <select class="form-select" id="role" name="role" value="<?= htmlspecialchars($user['role']) ?>" required>
-                    <option value="admin" <?= $user['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                    <option value="teacher" <?= $user['role'] === 'teacher' ? 'selected' : '' ?>>Teacher</option>
+                <select class="form-select" id="role" name="role" required>
                     <option value="student" <?= $user['role'] === 'student' ? 'selected' : '' ?>>Student</option>
+                    <option value="moderator" <?= $user['role'] === 'moderator' ? 'selected' : '' ?>>Moderator</option>
+                    <option value="coach" <?= $user['role'] === 'coach' ? 'selected' : '' ?>>Coach</option>
+                    <option value="facilitator" <?= $user['role'] === 'facilitator' ? 'selected' : '' ?>>Facilitator</option>
+                    <option value="admin" <?= $user['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
                 </select>
                 <div class="invalid-feedback">
                     Please specify the role.
@@ -86,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <!-- Bootstrap JS (if required for modals) -->
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-        <?php
+<?php
     } else {
         echo "User not found.";
     }

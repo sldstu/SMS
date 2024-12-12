@@ -22,9 +22,10 @@ if ($role === 'admin') {
         'admin_users' => '../MAIN/roles/admin_/users.php',
         'admin_sports' => '../MAIN/roles/admin_/sports.php',
         'admin_events' => '../MAIN/roles/admin_/events.php',
-        'admin_course_section' => '../MAIN/roles/admin_/course_section.php',
-        'admin_facilitator' => '../MAIN/roles/admin_/facilitator.php', // New page
-        'admin_registration' => '../MAIN/roles/admin_/registrations.php', // New page
+        'admin_facilitator' => '../MAIN/roles/admin_/facilitator.php',
+        'admin_registration' => '../MAIN/roles/admin_/registrations.php',
+        'admin_tryouts' => '../MAIN/roles/admin_/tryouts.php',
+        'admin_members' => '../MAIN/roles/admin_/members.php',
         '404' => 'MAIN/roles/guest/404.php',
     ];
     
@@ -33,10 +34,11 @@ if ($role === 'admin') {
         ['name' => 'Users', 'icon' => 'fa-solid fa-user', 'page' => 'admin_users'],
         ['name' => 'Sports', 'icon' => 'fa-solid fa-medal', 'page' => 'admin_sports'],
         ['name' => 'Events', 'icon' => 'fa-solid fa-calendar-days', 'page' => 'admin_events'],
-        ['name' => 'Facilitator', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_facilitator'], // New item
-        ['name' => 'Registrations', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_registration'], // New item
+        ['name' => 'Facilitator', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_facilitator'],
+        ['name' => 'Registrations', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_registration'],
+        ['name' => 'Tryouts', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'admin_tryouts'],
+        ['name' => 'Members', 'icon' => 'fa-solid fa-users', 'page' => 'admin_members'],
     ];
-    
 } elseif ($role === 'moderator') {
     $allowed_pages = [
         'mod_dashboard' => '../MAIN/roles/moderator_/dashboard_mod.php',
@@ -65,6 +67,32 @@ if ($role === 'admin') {
         ['name' => 'Registered Sports', 'icon' => 'fa-solid fa-user-check', 'page' => 'student_regSports'],
         ['name' => 'Sports', 'icon' => 'fa-solid fa-medal', 'page' => 'student_sports'],
     ];
+} elseif ($role === 'coach') {
+    $allowed_pages = [
+        'coach_dashboard' => '../MAIN/roles/coach_/dashboard.php',
+        'coach_sports' => '../MAIN/roles/coach_/coach_sports.php',
+        'coach_tryouts' => '../MAIN/roles/coach_/coach_tryouts.php',
+        'coach_members' => '../MAIN/roles/coach_/coach_members.php',
+        '404' => 'MAIN/roles/guest/404.php',
+    ];
+    $sidebar_items = [
+        ['name' => 'Dashboard', 'icon' => 'bi bi-grid-fill', 'page' => 'coach_dashboard'],
+        ['name' => 'Sports', 'icon' => 'fa-solid fa-medal', 'page' => 'coach_sports'],
+        ['name' => 'Tryouts', 'icon' => 'fa-solid fa-clipboard-list', 'page' => 'coach_tryouts'],
+        ['name' => 'Members', 'icon' => 'fa-solid fa-users', 'page' => 'coach_members'],
+    ];
+} elseif ($role === 'facilitator') {
+    $allowed_pages = [
+        'facilitator_dashboard' => '../MAIN/roles/facilitator_/dashboard.php',
+        'facilitator_sports' => '../MAIN/roles/facilitator_/fac_sports.php',
+        'facilitator_members' => '../MAIN/roles/facilitator_/fac_members.php',
+        '404' => 'MAIN/roles/guest/404.php',
+    ];
+    $sidebar_items = [
+        ['name' => 'Dashboard', 'icon' => 'bi bi-grid-fill', 'page' => 'facilitator_dashboard'],
+        ['name' => 'Sports', 'icon' => 'fa-solid fa-medal', 'page' => 'facilitator_sports'],
+        ['name' => 'Members', 'icon' => 'fa-solid fa-users', 'page' => 'facilitator_members'],
+    ];
 } else {
     header('Location: ../MAIN/auth/login.php');
     exit();
@@ -90,6 +118,13 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'true') {
 
 ob_end_flush(); // Flush the buffered output after headers
 ?>
+
+<style>
+    a {
+        text-decoration: none;
+        color: #fff;
+    }
+</style>
 
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">

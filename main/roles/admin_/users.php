@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $query->bindParam(':user_id', $user_id);
             $query->execute();
 
-            $query = $conn->prepare("UPDATE sports SET teacher_id = NULL WHERE teacher_id = :user_id");
+            $query = $conn->prepare("UPDATE sports SET moderator_id = NULL WHERE moderator_id = :user_id");
             $query->bindParam(':user_id', $user_id);
             $query->execute();
 
@@ -45,18 +45,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (isset($input['action']) && $input['action'] === 'create_user') {
         $username = trim($input['username']);
-        $password = password_hash(trim($input['password']), PASSWORD_BCRYPT); // Encrypt password
+        $password = password_hash(trim($input['password']), PASSWORD_BCRYPT);
         $first_name = trim($input['first_name']);
         $last_name = trim($input['last_name']);
+        $email = trim($input['email']);
+        $middle_name = trim($input['middle_name'] ?? '');
+
         $role = trim($input['role']);
 
-        // Validate input
+        // Validate input and role
         if (empty($username) || empty($password) || empty($first_name) || empty($last_name) || empty($role)) {
             echo json_encode(['success' => false, 'message' => 'All fields are required.']);
             exit();
         }
 
-        // Check if username already exists
+        // Validate role is one of the allowed types
+        $allowed_roles = ['student', 'moderator', 'admin', 'coach', 'facilitator'];
+        if (!in_array($role, $allowed_roles)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid role specified.']);
+            exit();
+        }
+
+        // Check if username exists
         $query = $conn->prepare("SELECT * FROM users WHERE username = :username");
         $query->bindParam(':username', $username);
         $query->execute();
@@ -67,15 +77,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         try {
-            // Insert new user
+            // Insert new user with role
             $query = $conn->prepare("
-                INSERT INTO users (username, password, first_name, last_name, role, datetime_sign_up) 
-                VALUES (:username, :password, :first_name, :last_name, :role, NOW())
-            ");
+            INSERT INTO users (username, password, first_name, middle_name, last_name, email, role, datetime_sign_up) 
+            VALUES (:username, :password, :first_name, :middle_name, :last_name, :email, :role, NOW())
+        ");
+
             $query->bindParam(':username', $username);
             $query->bindParam(':password', $password);
             $query->bindParam(':first_name', $first_name);
+            $query->bindParam(':middle_name', $middle_name);
             $query->bindParam(':last_name', $last_name);
+            $query->bindParam(':email', $email);
             $query->bindParam(':role', $role);
 
             if ($query->execute()) {
@@ -85,7 +98,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'user_id' => $conn->lastInsertId(),
                         'username' => $username,
                         'first_name' => $first_name,
+                        'middle_name' => $middle_name,
                         'last_name' => $last_name,
+                        'email' => $email,
                         'role' => $role,
                         'datetime_sign_up' => date('Y-m-d H:i:s'),
                         'datetime_last_online' => null
@@ -100,6 +115,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 ?>
+<style>
+    .user-inactive {
+        background-color: #f8f9fa;
+        color: #6c757d;
+        font-style: italic;
+    }
+</style>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -117,17 +139,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
             <input type="text" id="search_bar" class="form-control w-auto" placeholder="Search usernames..." onkeyup="searchUser()">
-            <select id="role_filter" class="form-select w-auto" onchange="filterRole()">
-                <option value="">All Roles</option>
-                <option value="student">Student</option>
-                <option value="teacher">Moderator</option>
-                <option value="admin">Admin</option>
-            </select>
-            <button class="btn btn-primary px-4 shadow-sm" onclick="sortTable()">Sort Alphabetically</button>
-            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
-                Create User
-            </button>
+            <div class="filter-container d-flex gap-3 align-items-center">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="show_active" checked>
+                    <label class="form-check-label" for="show_active">Active Users</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="checkbox" id="show_inactive">
+                    <label class="form-check-label" for="show_inactive">Inactive Users</label>
+                </div>
+                <select id="role_filter" class="form-select w-auto">
+                    <option value="">All Roles</option>
+                    <option value="student">Student</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="coach">Coach</option>
+                    <option value="facilitator">Facilitator</option>
+                    <option value="admin">Admin</option>
+                </select>
+                <button class="btn btn-primary px-4 shadow-sm" onclick="sortTable()">Sort Alphabetically</button>
+            </div>
         </div>
+
 
 
         <!-- Users Table -->
@@ -138,7 +170,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <th>Username</th>
                         <th>Role</th>
                         <th>First Name</th>
+                        <th>Middle Name</th>
                         <th>Last Name</th>
+                        <th>Email</th>
                         <th>Sign Up Time</th>
                         <th>Last Online</th>
                         <th>Action</th>
@@ -150,12 +184,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <td class="username"><?= htmlspecialchars($user['username']) ?></td>
                             <td class="role"><?= htmlspecialchars($user['role']) ?></td>
                             <td class="first_name"><?= htmlspecialchars($user['first_name']) ?></td>
+                            <td class="middle_name"><?= htmlspecialchars($user['middle_name']) ?></td>
                             <td class="last_name"><?= htmlspecialchars($user['last_name']) ?></td>
+                            <td class="email"><?= htmlspecialchars($user['email']) ?></td>
                             <td><?= htmlspecialchars($user['datetime_sign_up']) ?></td>
                             <td><?= htmlspecialchars($user['datetime_last_online']) ?></td>
                             <td class="text-center">
                                 <div class="d-flex justify-content-center gap-2">
-                                    <button class="btn btn-warning btn-sm edit-user-btn px-3" data-user-id="<?= $user['user_id'] ?>">Edit</button>
+                                    <div class="btn-group">
+                                        <button class="btn btn-warning btn-sm edit-user-btn px-3" data-user-id="<?= $user['user_id'] ?>">Edit</button>
+                                        <button type="button" class="btn btn-warning btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <span class="visually-hidden">Toggle Status</span>
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li><a class="dropdown-item status-action" href="#" data-action="activate" data-user-id="<?= $user['user_id'] ?>">Activate Account</a></li>
+                                            <li><a class="dropdown-item status-action" href="#" data-action="deactivate" data-user-id="<?= $user['user_id'] ?>">Deactivate Account</a></li>
+                                        </ul>
+                                    </div>
                                     <button class="btn btn-danger btn-sm delete-user-btn px-3" data-user-id="<?= $user['user_id'] ?>" data-username="<?= htmlspecialchars($user['username']) ?>">Delete</button>
                                 </div>
                             </td>
@@ -226,10 +271,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                         </div>
                         <div class="mb-3">
+                            <label for="middle_name" class="form-label">Middle Name (Optional)</label>
+                            <input type="text" class="form-control" id="middle_name" name="middle_name">
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                            <div class="invalid-feedback">
+                                Please provide a valid email address.
+                            </div>
+                        </div>
+                        <div class="mb-3">
                             <label for="role" class="form-label">Role</label>
                             <select class="form-select" id="role" name="role" required>
                                 <option value="student">Student</option>
-                                <option value="teacher">Teacher</option>
+                                <option value="moderator">Moderator</option>
+                                <option value="coach">Coach</option>
+                                <option value="facilitator">Facilitator</option>
                                 <option value="admin">Admin</option>
                             </select>
                             <div class="invalid-feedback">
@@ -266,26 +324,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+        // function filterRole() {
+        //     var input, filter, table, tr, td, i, txtValue;
+        //     input = document.getElementById("role_filter");
+        //     filter = input.value.toUpperCase();
+        //     table = document.getElementById("users_table");
+        //     tr = table.getElementsByTagName("tr");
 
-        function filterRole() {
-            var input, filter, table, tr, td, i, txtValue;
-            input = document.getElementById("role_filter");
-            filter = input.value.toUpperCase();
-            table = document.getElementById("users_table");
-            tr = table.getElementsByTagName("tr");
+        //     for (i = 1; i < tr.length; i++) {
+        //         td = tr[i].getElementsByTagName("td")[1];
+        //         if (td) {
+        //             txtValue = td.textContent || td.innerText;
+        //             if (filter === "" || txtValue.toUpperCase() === filter) {
+        //                 tr[i].style.display = "";
+        //             } else {
+        //                 tr[i].style.display = "none";
+        //             }
+        //         }
+        //     }
+        // }
 
-            for (i = 1; i < tr.length; i++) {
-                td = tr[i].getElementsByTagName("td")[1];
-                if (td) {
-                    txtValue = td.textContent || td.innerText;
-                    if (filter === "" || txtValue.toUpperCase() === filter) {
-                        tr[i].style.display = "";
-                    } else {
-                        tr[i].style.display = "none";
+        function filterUsers() {
+            const showActive = document.getElementById('show_active').checked;
+            const showInactive = document.getElementById('show_inactive').checked;
+            const roleFilter = document.getElementById('role_filter').value.toUpperCase();
+            const table = document.getElementById('users_table');
+            const rows = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const roleCell = row.getElementsByTagName('td')[1];
+                const isInactive = row.classList.contains('user-inactive');
+
+                let showRow = true;
+
+                // Check status filter
+                if ((!showActive && !isInactive) || (!showInactive && isInactive)) {
+                    showRow = false;
+                }
+
+                // Check role filter
+                if (roleFilter && roleCell) {
+                    const roleText = roleCell.textContent || roleCell.innerText;
+                    if (roleText.toUpperCase() !== roleFilter && roleFilter !== '') {
+                        showRow = false;
                     }
                 }
+
+                row.style.display = showRow ? '' : 'none';
             }
         }
+        document.getElementById('show_active').addEventListener('change', filterUsers);
+        document.getElementById('show_inactive').addEventListener('change', filterUsers);
+        document.getElementById('role_filter').addEventListener('change', filterUsers);
+
+        document.querySelectorAll('.status-action').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const userId = this.dataset.userId;
+                const action = this.dataset.action;
+
+                fetch('../MAIN/roles/admin_/update_user_status.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            user_id: userId,
+                            action: action
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const row = document.querySelector(`#user-row-${userId}`);
+                            row.classList.toggle('user-inactive', action === 'deactivate');
+                            filterUsers(); // Reapply filters after status change
+                        }
+                    });
+            });
+        });
 
         function sortTable() {
             var table, rows, switching, i, x, y, shouldSwitch;
@@ -309,6 +427,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+
+
+
+        document.querySelectorAll('.status-action').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                const userId = this.dataset.userId;
+                const action = this.dataset.action;
+
+                fetch('../MAIN/roles/admin_/update_user_status.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            user_id: userId,
+                            action: action
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Update UI to reflect new status
+                            const row = document.querySelector(`#user-row-${userId}`);
+                            row.classList.toggle('table-secondary', action === 'deactivate');
+                        }
+                    });
+            });
+        });
 
         document.addEventListener('DOMContentLoaded', () => {
             // Attach event listeners to delete buttons
@@ -411,7 +558,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     userRow.querySelector(".username").textContent = formData.get("username");
                                     userRow.querySelector(".role").textContent = formData.get("role");
                                     userRow.querySelector(".first_name").textContent = formData.get("first_name");
+                                    userRow.querySelector(".middle_name").textContent = formData.get("middle_name");
                                     userRow.querySelector(".last_name").textContent = formData.get("last_name");
+                                    userRow.querySelector(".email").textContent = formData.get("email");
                                 }
                                 const modal = bootstrap.Modal.getInstance(document.getElementById("editUserModal"));
                                 modal.hide();
@@ -422,6 +571,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         .catch(error => console.error("Error:", error));
                 });
             }
+
 
             // Real-time validation feedback
             document.querySelectorAll("#editUserModal .modal-body input[required]").forEach(input => {
