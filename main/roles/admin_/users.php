@@ -126,7 +126,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/SMS/css/style.css">
 </head>
-
+<style>
+.user-inactive {
+    background-color: #f8f9fa !important;
+    color: #6c757d !important;
+    font-style: italic;
+}
+</style>
 <body>
     <div id="users_section" class="container mt-4">
         <h2 class="mb-4">User Management</h2>
