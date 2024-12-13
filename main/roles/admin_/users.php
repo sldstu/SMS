@@ -127,12 +127,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="/SMS/css/style.css">
 </head>
 <style>
-.user-inactive {
-    background-color: #f8f9fa !important;
-    color: #6c757d !important;
-    font-style: italic;
-}
+    .user-inactive {
+        background-color: #f8f9fa !important;
+        color: #6c757d !important;
+        font-style: italic;
+    }
 </style>
+
 <body>
     <div id="users_section" class="container mt-4">
         <h2 class="mb-4">User Management</h2>
@@ -157,6 +158,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <option value="admin">Admin</option>
                 </select>
                 <button class="btn btn-primary px-4 shadow-sm" onclick="sortTable()">Sort Alphabetically</button>
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                    Create User
+                </button>
             </div>
         </div>
 
@@ -302,8 +306,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <script>
-
-            
             function searchUser() {
                 var input, filter, table, tr, td, i, txtValue;
                 input = document.getElementById("search_bar");
@@ -612,7 +614,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         input.classList.remove("is-invalid");
                         const invalidFeedback = input.nextElementSibling;
                         if (invalidFeedback) {
-                            invalidFeedback.style.display = "none"; // Hide the error messages
+                            invalidFeedback.style.display = "none";
                         }
                     });
 
@@ -621,16 +623,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Check if any required field is empty and display invalid feedback
                     form.querySelectorAll("input[required], select[required]").forEach(input => {
                         if (!input.value.trim()) {
-                            input.classList.add("is-invalid"); // Add the red border
+                            input.classList.add("is-invalid");
                             const invalidFeedback = input.nextElementSibling;
                             if (invalidFeedback) {
-                                invalidFeedback.style.display = "block"; // Show the error message
+                                invalidFeedback.style.display = "block";
                             }
                             isValid = false;
                         }
                     });
 
-                    // If the form is invalid, stop the process
                     if (!isValid) return;
 
                     const data = {
@@ -638,11 +639,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         username: formData.get("username"),
                         password: formData.get("password"),
                         first_name: formData.get("first_name"),
+                        middle_name: formData.get("middle_name"),
                         last_name: formData.get("last_name"),
+                        email: formData.get("email"),
                         role: formData.get("role"),
                     };
 
-                    // Send the request to the server
                     fetch("../MAIN/roles/admin_/users.php", {
                             method: "POST",
                             headers: {
@@ -659,30 +661,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 tbody.insertAdjacentHTML(
                                     "beforeend",
                                     `<tr id="user-row-${user.user_id}">
-                        <td>${user.username}</td>
-                        <td>${user.role}</td>
-                        <td>${user.first_name}</td>
-                        <td>${user.last_name}</td>
-                        <td>${user.datetime_sign_up}</td>
-                        <td>${user.datetime_last_online || ""}</td>
-                        <td class="text-center">
-                            <button class="btn btn-warning btn-sm edit-user-btn px-3" data-user-id="${user.user_id}">Edit</button>
+                    <td class="username">${user.username}</td>
+                    <td class="role">${user.role}</td>
+                    <td class="first_name">${user.first_name}</td>
+                    <td class="middle_name">${user.middle_name || ''}</td>
+                    <td class="last_name">${user.last_name}</td>
+                    <td class="email">${user.email}</td>
+                    <td>${user.datetime_sign_up}</td>
+                    <td>${user.datetime_last_online || ""}</td>
+                    <td class="text-center">
+                        <div class="d-flex justify-content-center gap-2">
+                            <div class="btn-group">
+                                <button class="btn btn-warning btn-sm edit-user-btn px-3" data-user-id="${user.user_id}">Edit</button>
+                                <button type="button" class="btn btn-warning btn-sm dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span class="visually-hidden">Toggle Status</span>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item status-action" href="#" data-action="activate" data-user-id="${user.user_id}">Activate Account</a></li>
+                                    <li><a class="dropdown-item status-action" href="#" data-action="deactivate" data-user-id="${user.user_id}">Deactivate Account</a></li>
+                                </ul>
+                            </div>
                             <button class="btn btn-danger btn-sm delete-user-btn px-3" data-user-id="${user.user_id}" data-username="${user.username}">Delete</button>
-                        </td>
-                    </tr>`
+                        </div>
+                    </td>
+                </tr>`
                                 );
 
-                                // Reset the form and hide the modal
                                 form.reset();
                                 bootstrap.Modal.getInstance(document.getElementById("addUserModal")).hide();
                             } else {
-                                // Handle error for existing username
-                                if (result.message === "Username already exists. Please choose another.") {
+                                if (result.message === "Username already exists.") {
                                     const usernameInput = document.getElementById("username");
                                     const usernameError = document.getElementById("usernameError");
                                     usernameError.textContent = result.message;
-                                    usernameInput.classList.add("is-invalid"); // Highlight input with error
-                                    usernameError.style.display = "block"; // Show error message
+                                    usernameInput.classList.add("is-invalid");
+                                    usernameError.style.display = "block";
                                 } else {
                                     alert(result.message || "Failed to create user.");
                                 }
@@ -691,18 +704,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         .catch((error) => console.error("Error:", error));
                 });
 
-                // Real-time validation feedback
-                document.querySelectorAll("#addUserModal .modal-body input[required]").forEach(input => {
-                    input.addEventListener("input", function() {
-                        if (this.value.trim()) {
-                            this.classList.remove("is-invalid");
-                            const invalidFeedback = this.nextElementSibling;
-                            if (invalidFeedback) {
-                                invalidFeedback.style.display = "none"; // Hide error message
-                            }
-                        }
-                    });
-                });
 
                 // Specifically handle username validation (to show the message "Username already exists.")
                 document.getElementById("username").addEventListener("input", function() {

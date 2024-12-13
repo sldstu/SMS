@@ -257,7 +257,7 @@ if (!$events) {
                     <p><strong>Start Date:</strong> <span id="event-start-date"></span></p>
                     <p><strong>End Date:</strong> <span id="event-end-date"></span></p>
                     <p><strong>Location:</strong> <span id="event-location"></span></p>
-                    
+
                 </div>
                 <div class="modal-footer">
 
@@ -331,6 +331,7 @@ if (!$events) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let eventDetails = <?php echo json_encode($events); ?>;
+
         function showEventDetails(eventId) {
             const event = eventDetails.find(e => e.event_id == eventId);
             if (event) {
@@ -412,35 +413,6 @@ if (!$events) {
                     }
                 });
         });
-
-        document.addEventListener('DOMContentLoaded', () => {
-    // Add event listener for the edit form submission
-    document.querySelector('#editEventModal').addEventListener('submit', function(e) {
-        if (e.target.matches('#editEventForm')) {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            
-            fetch('../main/edit/edit_event_admin.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Refresh the page or update the UI
-                    location.reload();
-                } else {
-                    alert(data.message || 'Error updating event');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while updating the event');
-            });
-        }
-    });
-});
-
     </script>
 
 </body>

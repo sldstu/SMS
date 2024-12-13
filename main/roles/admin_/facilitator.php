@@ -10,37 +10,35 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
 require_once __DIR__ . '/../../database/database.class.php';
 $conn = (new Database())->connect();
 
-// Fetch existing facilitators and their assigned sports
+// Fetch existing facilitators from users table
 $query = $conn->prepare(
-    "SELECT f.*, u.user_id, GROUP_CONCAT(DISTINCT s.sport_name SEPARATOR ', ') AS assigned_sports
-     FROM facilitators f
-     LEFT JOIN users u ON f.email = u.email
-     LEFT JOIN sports s ON f.facilitator_id = s.facilitator_id
-     GROUP BY f.facilitator_id"
+    "SELECT u.*
+     FROM users u
+     WHERE u.role = 'facilitator'"
 );
 $query->execute();
 $facilitators = $query->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch all users (students and moderators) for assigning as facilitators
+// Fetch potential facilitators (users who could become facilitators)
 $user_query = $conn->prepare("SELECT * FROM users WHERE role IN ('student', 'moderator')");
 $user_query->execute();
-$users = $user_query->fetchAll(PDO::FETCH_ASSOC);
+$potential_facilitators = $user_query->fetchAll(PDO::FETCH_ASSOC);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = json_decode(file_get_contents('php://input'), true);
 
-    if (isset($input['action']) && $input['action'] === 'remove_facilitator' && isset($input['facilitator_id'])) {
-        $facilitator_id = $input['facilitator_id'];
+    if (isset($input['action']) && $input['action'] === 'remove_facilitator' && isset($input['user_id'])) {
+        $user_id = $input['user_id'];
 
         try {
-            // Dissociate facilitator from sports
-            $updateSports = $conn->prepare("UPDATE sports SET facilitator_id = NULL WHERE facilitator_id = :facilitator_id");
-            $updateSports->bindParam(':facilitator_id', $facilitator_id);
+            // Update sports table to remove facilitator association
+            $updateSports = $conn->prepare("UPDATE sports SET facilitator_id = NULL WHERE facilitator_id = :user_id");
+            $updateSports->bindParam(':user_id', $user_id);
             $updateSports->execute();
 
-            // Delete facilitator from the facilitators table
-            $query = $conn->prepare("DELETE FROM facilitators WHERE facilitator_id = :facilitator_id");
-            $query->bindParam(':facilitator_id', $facilitator_id);
+            // Update user role back to student
+            $query = $conn->prepare("UPDATE users SET role = 'student' WHERE user_id = :user_id");
+            $query->bindParam(':user_id', $user_id);
             $query->execute();
 
             echo json_encode(['success' => true]);
@@ -53,37 +51,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (isset($input['action']) && $input['action'] === 'assign_facilitator' && isset($input['user_id'])) {
         $user_id = $input['user_id'];
 
-        // Fetch user details
-        $user_query = $conn->prepare("SELECT * FROM users WHERE user_id = :user_id");
-        $user_query->bindParam(':user_id', $user_id);
-        $user_query->execute();
-        $user = $user_query->fetch(PDO::FETCH_ASSOC);
-
-        if (!$user) {
-            echo json_encode(['success' => false, 'message' => 'User not found.']);
-            exit();
-        }
-
         try {
-            // Combine first name and last name into full name
-            $full_name = $user['first_name'] . ' ' . $user['last_name'];
-
-            // Insert new facilitator
-            $query = $conn->prepare(
-                "INSERT INTO facilitators (full_name, email) VALUES (:full_name, :email)"
-            );
-            $query->bindParam(':full_name', $full_name);
-            $query->bindParam(':email', $user['email']);
+            // Update user role to facilitator
+            $query = $conn->prepare("UPDATE users SET role = 'facilitator' WHERE user_id = :user_id");
+            $query->bindParam(':user_id', $user_id);
 
             if ($query->execute()) {
+                // Fetch updated user info
+                $user_query = $conn->prepare("SELECT * FROM users WHERE user_id = :user_id");
+                $user_query->bindParam(':user_id', $user_id);
+                $user_query->execute();
+                $user = $user_query->fetch(PDO::FETCH_ASSOC);
+
                 echo json_encode([
                     'success' => true,
-                    'facilitator' => [
-                        'facilitator_id' => $conn->lastInsertId(),
-                        'full_name' => $full_name,
-                        'email' => $user['email'],
-                        'user_id' => $user['user_id']
-                    ]
+                    'facilitator' => $user
                 ]);
                 exit();
             }
@@ -95,57 +77,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Admin Dashboard - Facilitators</title>
-        <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"> -->
-        <link rel="stylesheet" href="/SMS/css/style.css">
-    </head>
-    <body>
-        <div id="facilitators_section" class="container mt-4">
-            <h2 class="mb-4">Facilitator Management</h2>
+<!DOCTYPE html>
+<html lang="en">
 
-            <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
-                <input type="text" id="search_bar" class="form-control w-auto" placeholder="Search facilitators..." onkeyup="searchFacilitator()">
-                <button class="btn btn-primary px-4 shadow-sm" onclick="sortTable()">Sort Alphabetically</button>
-                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#assignFacilitatorModal">
-                    Assign a Facilitator
-                </button>
-            </div>
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Facilitators</title>
+    <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"> -->
+    <link rel="stylesheet" href="/SMS/css/style.css">
+</head>
 
-            <!-- Facilitators Table -->
-            <div class="table-responsive">
-                <table id="facilitators_table" class="table table-hover align-middle table-bordered rounded-3 overflow-hidden shadow">
-                    <thead class="table-primary">
-                        <tr class="text-center">
-                            <th>User ID</th>
-                            <th>Facilitator ID</th>
-                            <th>Full Name</th>
-                            <th>Email</th>
-                            <th>Assigned Sports</th>
-                            <th>Action</th>
+<body>
+    <div id="facilitators_section" class="container mt-4">
+        <h2 class="mb-4">Facilitator Management</h2>
+
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+            <input type="text" id="search_bar" class="form-control w-auto" placeholder="Search facilitators..." onkeyup="searchFacilitator()">
+            <button class="btn btn-primary px-4 shadow-sm" onclick="sortTable()">Sort Alphabetically</button>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#assignFacilitatorModal">
+                Assign a Facilitator
+            </button>
+        </div>
+
+        <!-- Facilitators Table -->
+        <div class="table-responsive">
+            <table id="facilitators_table" class="table table-hover align-middle table-bordered rounded-3 overflow-hidden shadow">
+                <thead class="table-primary">
+                    <tr class="text-center">
+                        <th>Username</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Assigned Sports</th>
+                        <th>Last Online</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($facilitators as $facilitator): ?>
+                        <tr id="facilitator-row-<?= $facilitator['user_id'] ?>">
+                            <td><?= htmlspecialchars($facilitator['username']) ?></td>
+                            <td><?= htmlspecialchars($facilitator['first_name'] . ' ' . $facilitator['middle_name'] . ' ' . $facilitator['last_name']) ?></td>
+                            <td><?= htmlspecialchars($facilitator['email']) ?></td>
+                            <td><?= htmlspecialchars($facilitator['assigned_sports'] ?? 'None') ?></td>
+                            <td><?= htmlspecialchars($facilitator['datetime_last_online']) ?></td>
+                            <td class="text-center">
+                                <button class="btn btn-danger btn-sm remove-facilitator-btn px-3"
+                                    data-user-id="<?= $facilitator['user_id'] ?>"
+                                    data-username="<?= htmlspecialchars($facilitator['username']) ?>">
+                                    Remove as Facilitator
+                                </button>
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($facilitators as $facilitator): ?>
-                            <tr id="facilitator-row-<?= $facilitator['facilitator_id'] ?>">
-                                <td><?= htmlspecialchars($facilitator['user_id']) ?></td>
-                                <td><?= htmlspecialchars($facilitator['facilitator_id']) ?></td>
-                                <td class="full_name"><?= htmlspecialchars($facilitator['full_name']) ?></td>
-                                <td class="email"><?= htmlspecialchars($facilitator['email']) ?></td>
-                                <td><?= htmlspecialchars($facilitator['assigned_sports'] ?? '') ?></td>
-                                <td class="text-center">
-                                    <div class="d-flex justify-content-center gap-2">
-                                        <button class="btn btn-danger btn-sm remove-facilitator-btn px-3" data-facilitator-id="<?= $facilitator['facilitator_id'] ?>" data-email="<?= htmlspecialchars($facilitator['email']) ?>">Remove as Facilitator</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
 
         <!-- Assign Facilitator Modal -->
@@ -182,25 +167,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
 
-        
-    <!-- Confirmation Modal -->
-    <div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="confirmationModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="confirmationModalLabel">Confirm Removal</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p id="confirmationMessage"></p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-danger" id="confirmRemoveBtn">Remove</button>
+
+        <!-- Confirmation Modal -->
+        <div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="confirmationModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="confirmationModalLabel">Confirm Removal</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p id="confirmationMessage"></p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-danger" id="confirmRemoveBtn">Remove</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
 
         <script>
@@ -250,7 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.addEventListener('DOMContentLoaded', () => {
                 // Event listener for removing a facilitator
                 document.querySelectorAll('.remove-facilitator-btn').forEach(button => {
-                    button.addEventListener('click', function () {
+                    button.addEventListener('click', function() {
                         const facilitatorId = this.dataset.facilitatorId;
                         const email = this.dataset.email;
 
@@ -263,34 +248,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         confirmRemoveBtn.replaceWith(confirmRemoveBtn.cloneNode(true));
                         const newConfirmRemoveBtn = document.getElementById('confirmRemoveBtn');
 
-                        newConfirmRemoveBtn.addEventListener('click', function () {
+                        newConfirmRemoveBtn.addEventListener('click', function() {
                             fetch("../main/roles/admin_/facilitator.php", {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json"
-                                },
-                                body: JSON.stringify({
-                                    action: "remove_facilitator",
-                                    facilitator_id: facilitatorId
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({
+                                        action: "remove_facilitator",
+                                        facilitator_id: facilitatorId
+                                    })
                                 })
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.success) {
-                                    const facilitatorRow = document.getElementById(`facilitator-row-${facilitatorId}`);
-                                    if (facilitatorRow) {
-                                        facilitatorRow.remove();
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.success) {
+                                        const facilitatorRow = document.getElementById(`facilitator-row-${facilitatorId}`);
+                                        if (facilitatorRow) {
+                                            facilitatorRow.remove();
+                                        }
+                                        const modalInstance = bootstrap.Modal.getInstance(document.getElementById("confirmationModal"));
+                                        modalInstance.hide();
+                                    } else {
+                                        alert(data.message || "Failed to remove facilitator.");
                                     }
-                                    const modalInstance = bootstrap.Modal.getInstance(document.getElementById("confirmationModal"));
-                                    modalInstance.hide();
-                                } else {
-                                    alert(data.message || "Failed to remove facilitator.");
-                                }
-                            })
-                            .catch(error => {
-                                console.error("Error during remove operation:", error);
-                                alert("An error occurred while removing the facilitator.");
-                            });
+                                })
+                                .catch(error => {
+                                    console.error("Error during remove operation:", error);
+                                    alert("An error occurred while removing the facilitator.");
+                                });
                         });
                     });
                 });

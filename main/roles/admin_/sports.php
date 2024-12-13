@@ -2,8 +2,7 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-
-if ($_SESSION['role'] !== 'admin') {
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     header('Location: login.php');
     exit();
 }
@@ -11,44 +10,57 @@ if ($_SESSION['role'] !== 'admin') {
 require_once __DIR__ . '/../../database/database.class.php';
 $conn = (new Database())->connect();
 
-// Fetch all sports with facilitators and events
+
+// First, fetch all sports with their related data
 $query = $conn->prepare("
     SELECT 
         s.sport_id,
         s.sport_name,
         s.event_id,
+        s.user_id,
         s.sport_image,
         s.sport_description,
         s.sport_location,
         s.sport_time,
         s.sport_date,
-        GROUP_CONCAT(DISTINCT CONCAT(f.full_name, ' (', f.email, ')')) as facilitator_names,
-        GROUP_CONCAT(DISTINCT f.facilitator_id) as facilitator_ids,
+        s.ranking,
+        s.awards,
+        u.first_name,
+        u.last_name,
+        u.email,
         e.event_name
     FROM sports s
-    LEFT JOIN facilitators f ON FIND_IN_SET(f.facilitator_id, s.facilitator_id)
+    LEFT JOIN users u ON u.user_id = s.user_id AND u.role = 'coach'
     LEFT JOIN events e ON s.event_id = e.event_id
-    GROUP BY 
-        s.sport_id,
-        s.sport_name,
-        s.event_id,
-        s.sport_image,
-        s.sport_description,
-        s.sport_location,
-        s.sport_time,
-        s.sport_date,
-        e.event_name
 ");
 $query->execute();
 $sports = $query->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch all events for the dropdown
+// Fetch events for dropdown
 $event_query = $conn->prepare("SELECT event_id, event_name FROM events");
 $event_query->execute();
 $events = $event_query->fetchAll(PDO::FETCH_ASSOC);
 
-// Fetch all facilitators for the dropdown
-$facilitator_query = $conn->prepare("SELECT facilitator_id, full_name, email FROM facilitators");
+// Fetch coaches for dropdown
+$coach_query = $conn->prepare("
+    SELECT 
+        user_id as coach_id, 
+        CONCAT(first_name, ' ', last_name) as full_name, 
+        email 
+    FROM users 
+    WHERE role = 'coach'
+");
+$coach_query->execute();
+$coaches = $coach_query->fetchAll(PDO::FETCH_ASSOC);
+
+$facilitator_query = $conn->prepare("
+    SELECT 
+        user_id as facilitator_id, 
+        CONCAT(first_name, ' ', last_name) as full_name, 
+        email 
+    FROM users 
+    WHERE role = 'facilitator'
+");
 $facilitator_query->execute();
 $facilitators = $facilitator_query->fetchAll(PDO::FETCH_ASSOC);
 
@@ -60,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sportTime = $_POST['sport_time'];
         $sportLocation = $_POST['sport_location'];
         $eventId = $_POST['event_id'];
-        $facilitatorIds = implode(',', $_POST['facilitators']); // Converting array to comma-separated string
+        $coachId = $_POST['coach'];
 
         // Handle image upload
         $imageData = null;
@@ -69,7 +81,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Insert sport into database
-        $query = $conn->prepare("INSERT INTO sports (sport_name, sport_description, sport_date, sport_time, sport_location, sport_image, event_id, facilitator_id) VALUES (:sport_name, :sport_description, :sport_date, :sport_time, :sport_location, :sport_image, :event_id, :facilitator_id)");
+        $query = $conn->prepare("
+            INSERT INTO sports (
+                sport_name, sport_description, sport_date, sport_time, 
+                sport_location, sport_image, event_id, user_id
+            ) VALUES (
+                :sport_name, :sport_description, :sport_date, :sport_time, 
+                :sport_location, :sport_image, :event_id, :user_id
+            )
+        ");
+
         $query->bindParam(':sport_name', $sportName);
         $query->bindParam(':sport_description', $sportDescription);
         $query->bindParam(':sport_date', $sportDate);
@@ -77,40 +98,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $query->bindParam(':sport_location', $sportLocation);
         $query->bindParam(':sport_image', $imageData);
         $query->bindParam(':event_id', $eventId);
-        $query->bindParam(':facilitator_id', $facilitatorIds);
+        $query->bindParam(':user_id', $coachId);
 
         if ($query->execute()) {
-            $newSportId = $conn->lastInsertId();
-
-            // Fetch complete sport data including facilitator and event
-            $query = $conn->prepare("
-                SELECT 
-                    s.*,
-                    GROUP_CONCAT(DISTINCT CONCAT(f.full_name, ' (', f.email, ')') SEPARATOR '|') as facilitator_names,
-                    GROUP_CONCAT(DISTINCT f.facilitator_id SEPARATOR '|') as facilitator_ids,
-                    e.event_name
-                FROM sports s
-                LEFT JOIN facilitators f ON FIND_IN_SET(f.facilitator_id, s.facilitator_id)
-                LEFT JOIN events e ON s.event_id = e.event_id
-                WHERE s.sport_id = :sport_id
-                GROUP BY s.sport_id
-            ");
-
-            $query->execute([':sport_id' => $newSportId]);
-            $newSport = $query->fetch(PDO::FETCH_ASSOC);
-
-            echo json_encode(['status' => 'success', 'sport' => $newSport]);
+            echo json_encode(['status' => 'success', 'message' => 'Sport created successfully']);
             exit();
         } else {
-            echo json_encode(['status' => 'error', 'message' => 'Error saving sport']);
+            echo json_encode(['status' => 'error', 'message' => 'Failed to create sport']);
             exit();
         }
     }
 }
 ?>
 
+
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -159,6 +163,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     </style>
 </head>
+
 <body class="bg-light">
     <div class="container my-5">
         <h1 class="text-center text-maroon">Sports</h1>
@@ -196,6 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <p><strong>Time:</strong> <span id="sport-time"></span></p>
                     <p><strong>Location:</strong> <span id="sport-location"></span></p>
                     <p><strong>Date:</strong> <span id="sport-date"></span></p>
+                    <p><strong>Coaches:</strong></p>
+                    <div id="sport-coaches" class="mb-3"></div>
                     <p><strong>Facilitators:</strong></p>
                     <div id="sport-facilitators" class="mb-3"></div>
                 </div>
@@ -251,22 +258,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="mb-3">
-                            <label for="facilitators" class="form-label">Select Facilitators</label>
-                            <select class="form-select" id="facilitators" name="facilitators[]" multiple required>
-                                <?php foreach ($facilitators as $facilitator): ?>
-                                    <option value="<?= htmlspecialchars($facilitator['facilitator_id']) ?>">
-                                        <?= htmlspecialchars($facilitator['full_name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#facilitatorsModal">
+                            Select Facilitators
+                        </button>
                     </div>
                     <div class="modal-footer">
                         <button type="submit" class="btn btn-primary">Save Sport</button>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal HTML -->
+    <div class="modal fade" id="facilitatorsModal" tabindex="-1" aria-labelledby="facilitatorsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <!-- Include select_facilitators.php -->
+                    <?php include 'select_facilitators.php'; ?>
+                </div>
             </div>
         </div>
     </div>
@@ -285,6 +297,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById('sport-description').innerText = sport.sport_description;
                 document.getElementById('sport-image').src = 'data:image/jpeg;base64,' + sport.sport_image;
 
+                // Display coaches
+                const coachNames = sport.coach_names ? sport.coach_names.split(', ') : [];
+                const coachesHtml = coachNames.length > 0 ?
+                    coachNames.map(name => `
+                <span class="badge bg-success me-2 mb-1">
+                    <i class="bi bi-person-fill me-1"></i>${name.trim()}
+                </span>`).join('') :
+                    '<span class="text-muted">No coaches assigned</span>';
+                document.getElementById('sport-coaches').innerHTML = coachesHtml;
+
                 // Display facilitators
                 const facilitatorNames = sport.facilitator_names ? sport.facilitator_names.split(', ') : [];
                 const facilitatorsHtml = facilitatorNames.length > 0 ?
@@ -293,47 +315,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <i class="bi bi-person-fill me-1"></i>${name.trim()}
                 </span>`).join('') :
                     '<span class="text-muted">No facilitators assigned</span>';
-
                 document.getElementById('sport-facilitators').innerHTML = facilitatorsHtml;
 
+                // Show the modal
                 new bootstrap.Modal(document.getElementById('sportDetailsModal')).show();
             }
         }
 
         document.getElementById('addSportForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
+    e.preventDefault();
+    const formData = new FormData(this);
 
-            fetch('../main/roles/admin_/sports.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        const newSport = data.sport;
-                        const sportCard = `
-                        <div class="col-md-4 mb-4" id="sport-card-${newSport.sport_id}">
-                            <div class="card shadow-sm" onclick="showSportDetails(${newSport.sport_id})">
-                                <img src="data:image/jpeg;base64,${newSport.sport_image}" class="card-img-top" alt="Sport Image">
-                                <div class="card-body">
-                                    <h5 class="card-title">${newSport.sport_name}</h5>
-                                    <p class="card-text text-truncate">${newSport.sport_description}</p>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                        document.querySelector('.row').insertAdjacentHTML('beforeend', sportCard);
-                        document.getElementById('addSportModal').querySelector('.btn-close').click(); // Close the modal
-                    } else {
-                        alert(data.message || "Failed to save sport.");
-                    }
-                })
-                .catch(error => {
-                    console.error("Error saving sport:", error);
-                    alert("An error occurred while saving the sport.");
-                });
+    fetch('sports.php', {  // Updated to use relative path since we're already in the same directory
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            location.reload(); // Refresh the page to show the new sport
+        } else {
+            alert(data.message || "Failed to save sport.");
+        }
+    })
+    .catch(error => {
+        console.error("Error saving sport:", error);
+        alert("An error occurred while saving the sport.");
+    });
+});
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('openFacilitatorModalBtn').addEventListener('click', function() {
+                const facilitatorModal = new bootstrap.Modal(document.getElementById('facilitatorModal'));
+                fetch('select_facilitators.php')
+                    .then(response => response.text())
+                    .then(data => {
+                        document.querySelector('#facilitatorModal .modal-content').innerHTML = data;
+                        facilitatorModal.show();
+                    });
+            });
         });
     </script>
 </body>
+
 </html>

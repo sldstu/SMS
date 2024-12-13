@@ -28,7 +28,7 @@ if ($role === 'admin') {
         'admin_members' => '../MAIN/roles/admin_/members.php',
         '404' => 'MAIN/roles/guest/404.php',
     ];
-    
+
     $sidebar_items = [
         ['name' => 'Dashboard', 'icon' => 'bi bi-grid-fill', 'page' => 'admin_dashboard'],
         ['name' => 'Users', 'icon' => 'fa-solid fa-user', 'page' => 'admin_users'],
@@ -71,8 +71,8 @@ if ($role === 'admin') {
     $allowed_pages = [
         'coach_dashboard' => '../MAIN/roles/coach_/dashboard.php',
         'coach_sports' => '../MAIN/roles/coach_/coach_sports.php',
-        'coach_tryouts' => '../MAIN/roles/coach_/coach_tryouts.php',
-        'coach_members' => '../MAIN/roles/coach_/coach_members.php',
+        'coach_tryouts' => '../MAIN/roles/coach_/tryouts.php',
+        'coach_members' => '../MAIN/roles/coach_/members.php',
         '404' => 'MAIN/roles/guest/404.php',
     ];
     $sidebar_items = [
@@ -118,13 +118,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'true') {
 
 ob_end_flush(); // Flush the buffered output after headers
 ?>
-
-<style>
-    a {
-        text-decoration: none;
-        color: #fff;
-    }
-</style>
 
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="dark">
@@ -172,27 +165,9 @@ ob_end_flush(); // Flush the buffered output after headers
                     <span class="navbar-toggler-icon"></span>
                 </button>
 
-                <!-- Search Bar
-                <form class="d-flex ms-auto me-3" role="search">
-                    <input class="form-control me-2" type="search" placeholder="Search..." aria-label="Search">
-                    <button class="btn btn-outline-primary" type="submit">
-                        <i class="fa-solid fa-magnifying-glass"></i>
-                    </button>
-                </form> -->
-
                 <div class="navbar-collapse navbar">
                     <ul class="navbar-nav">
-                        <li class="nav-item dropdown">
-                            <!-- <a href="#" data-bs-toggle="dropdown" class="nav-icon pe-md-0">
-                                <img src="image/profile.jpg" class="avatar img-fluid rounded">
-                            </a> -->
-                            <!-- <div class="dropdown-menu dropdown-menu-end">
-                                <a href="#" class="dropdown-item">Profile</a>
-                                <a href="#" class="dropdown-item">Setting</a>
-                                <a href="../MAIN/auth/logout.php" class="dropdown-item">Logout</a>
-                            </div> -->
-                            <button class="btn btn-danger"><a href="../MAIN/auth/logout.php" class="dropdown-item">Logout</a></button>
-                        </li>
+                        <button class="btn btn-danger"><a href="../MAIN/auth/logout.php" class="dropdown-item">Logout</a></button>
                     </ul>
                 </div>
             </nav>
@@ -213,23 +188,29 @@ ob_end_flush(); // Flush the buffered output after headers
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        // Intercept sidebar link clicks for AJAX loading
-        $(document).on('click', '.ajax-link', function (e) {
+        // Handle AJAX navigation
+        $(document).on('click', 'a.nav-link', async function(e) {
             e.preventDefault();
-            const url = $(this).attr('href') + '&ajax=true';
-            $.get(url, function (data) {
-                $('#content').html(data);
-                history.pushState(null, '', $(this).attr('href'));
-            });
+            const url = $(this).attr('href');
+            history.pushState(null, '', url);
+            await loadContent(url);
         });
 
-        // Handle browser back/forward navigation
-        $(window).on('popstate', function () {
-            const url = location.href + '&ajax=true';
-            $.get(url, function (data) {
-                $('#content').html(data);
-            });
+        window.addEventListener('popstate', async () => {
+            await loadContent(location.href);
         });
+
+        async function loadContent(url) {
+            try {
+                const response = await fetch(url);
+                const html = await response.text();
+                const content = $(html).find('#content').html();
+                $('#content').html(content);
+            } catch (error) {
+                console.error('Failed to load content:', error);
+                $('#content').html('<h1>Error loading content.</h1>');
+            }
+        }
     </script>
 </body>
 
